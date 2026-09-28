@@ -367,6 +367,23 @@ location?: string;
 | `GET`    | `/runs`                       | run history for the dashboard                            |
 | `GET`    | `/runs/{id}/companies`        | per-company breakdown for one run (`RunCompanyResult`)   |
 
+### Auth request/response shapes
+
+Frontend is built against these (FE-001); BE-011/012/013 should match.
+
+| Endpoint             | Request body                   | Success                                          |
+| -------------------- | ------------------------------ | ------------------------------------------------ |
+| `POST /auth/signup`  | `{ email, password }`          | `201 { access_token, token_type: "bearer" }`     |
+| `POST /auth/login`   | `{ email, password }`          | `200 { access_token, token_type: "bearer" }`     |
+| `POST /auth/google`  | `{ id_token }` (Google ID token from Google Identity Services) | `200 { access_token, token_type: "bearer" }` |
+
+- `access_token` is the JWT; its payload carries `user_id` and `exp`.
+- Errors use FastAPI's `{ detail }` shape:
+  - `409 { detail: "Email already registered" }` — signup with an existing email
+  - `422 { detail: [{ loc: ["body", "<field>"], msg }] }` — validation; the frontend shows `msg` under `<field>`
+  - `401 { detail: "..." }` — bad credentials or Google token
+- CORS on both services must allow the frontend origin (browser calls them directly).
+
 ---
 
 ## Services
