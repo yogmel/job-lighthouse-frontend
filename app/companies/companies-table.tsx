@@ -1,4 +1,5 @@
 import type { Company, Source } from "@/lib/api/companies";
+import { RowMenu, type RowMenuItem } from "./row-menu";
 
 const dateFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
 
@@ -9,19 +10,25 @@ export function sourceLabel(source: Source): string {
 
 type Props = {
   companies: Company[];
+  /** Row menu actions for one company. */
+  menuItems: (company: Company) => RowMenuItem[];
 };
 
-export function CompaniesTable({ companies }: Props) {
+export function CompaniesTable({ companies, menuItems }: Props) {
   return (
-    <div className="overflow-x-auto rounded-md border border-divider">
+    // No overflow clipping here: it would cut off the row menus.
+    <div className="rounded-md border border-divider">
       <table className="w-full text-left text-sm">
         <thead className="bg-surface text-xs text-muted">
           <tr>
             <th scope="col" className="px-4 py-2.5 font-medium">Name</th>
             <th scope="col" className="px-4 py-2.5 font-medium">Tier</th>
             <th scope="col" className="px-4 py-2.5 font-medium">Job board</th>
-            <th scope="col" className="px-4 py-2.5 font-medium">Added</th>
+            <th scope="col" className="hidden px-4 py-2.5 font-medium sm:table-cell">Added</th>
             <th scope="col" className="px-4 py-2.5 font-medium">Status</th>
+            <th scope="col" className="w-12 px-4 py-2.5">
+              <span className="sr-only">Actions</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -41,7 +48,7 @@ export function CompaniesTable({ companies }: Props) {
                 </span>
               </td>
               <td className="px-4 py-3 text-muted">{sourceLabel(company.source)}</td>
-              <td className="px-4 py-3 text-muted">
+              <td className="hidden px-4 py-3 text-muted sm:table-cell">
                 <time dateTime={company.added_at}>{dateFormat.format(new Date(company.added_at))}</time>
               </td>
               <td className="px-4 py-3">
@@ -54,6 +61,9 @@ export function CompaniesTable({ companies }: Props) {
                   />
                   {company.active ? "Active" : "Paused"}
                 </span>
+              </td>
+              <td className="px-4 py-3 text-right">
+                <RowMenu name={company.name} items={menuItems(company)} />
               </td>
             </tr>
           ))}

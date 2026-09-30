@@ -1,10 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { listCompanies, type Company } from "@/lib/api/companies";
+import {
+  createCompany,
+  listCompanies,
+  updateCompany,
+  type Company,
+} from "@/lib/api/companies";
 import { toFormErrors } from "@/lib/api/errors";
-import { AddCompanyForm } from "./add-company-form";
 import { CompaniesTable } from "./companies-table";
+import { CompanyDialog } from "./company-dialog";
+import type { CompanyDefaults } from "./company-fields";
+import type { RowMenuItem } from "./row-menu";
 
 type State =
   | { status: "loading" }
@@ -13,6 +20,10 @@ type State =
 
 function errorMessage(err: unknown): string {
   return toFormErrors(err, []).formError ?? "Something went wrong. Please try again.";
+}
+
+function toDefaults({ name, tier, website_url, source }: Company): CompanyDefaults {
+  return { name, tier, website_url, source: source.kind === "custom" ? undefined : source };
 }
 
 function summary(companies: Company[]): string {
@@ -24,6 +35,7 @@ function summary(companies: Company[]): string {
 export function CompaniesScreen() {
   const [state, setState] = useState<State>({ status: "loading" });
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Company>();
   const [banner, setBanner] = useState<string>();
 
   useEffect(() => {
@@ -43,6 +55,28 @@ export function CompaniesScreen() {
     );
     setAdding(false);
     setBanner(`${company.name} added.`);
+  }
+
+  function replaceCompany(company: Company) {
+    setState((prev) =>
+      prev.status === "ready"
+        ? { ...prev, companies: prev.companies.map((c) => (c.id === company.id ? company : c)) }
+        : prev,
+    );
+  }
+
+  function onUpdated(before: Company, after: Company) {
+    replaceCompany(after);
+    setEditing(undefined);
+    setBanner(
+      after.tier === before.tier
+        ? `${after.name} updated.`
+        : `${after.name} updated. Now Tier ${after.tier}.`,
+    );
+  }
+
+  function menuItems(company: Company): RowMenuItem[] {
+    return [{ label: "Edit company", onSelect: () => setEditing(company) }];
   }
 
   return (
@@ -91,10 +125,39 @@ export function CompaniesScreen() {
             </p>
           </div>
         ) : (
-          <CompaniesTable companies={state.companies} />
+          <CompaniesTable companies={state.companies} menuItems={menuItems} />
         ))}
 
-      {adding && <AddCompanyForm onCreated={onCreated} onClose={() => setAdding(false)} />}
+      {adding && (
+        <CompanyDialog
+          title="Add company"
+          submitLabel="Add company"
+          pendingLabel="Adding…"
+          idPrefix="add"
+          save={createCompany}
+          onSaved={onCreated}
+          onClose={() => setAdding(false)}
+        />
+      )}
+
+      {editing && (
+        <CompanyDialog
+          key={editing.id}
+          title={`Edit ${editing.name}`}
+          submitLabel="Save changes"
+          pendingLabel="Saving…"
+          idPrefix="edit"
+          defaults={toDefaults(editing)}
+          tierHint={(tier) =>
+            tier === editing.tier
+              ? undefined
+              : "Changing the tier re-groups this company's existing jobs."
+          }
+          save={(input) => updateCompany(editing.id, input)}
+          onSaved={(company) => onUpdated(editing, company)}
+          onClose={() => setEditing(undefined)}
+        />
+      )}
     </>
   );
 }

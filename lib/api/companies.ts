@@ -50,3 +50,13 @@ export function createCompany(input: CompanyInput): Promise<Company> {
     body: JSON.stringify(input),
   });
 }
+
+/** Partial update: send only what changed (e.g. `{ tier }` or `{ active }`). */
+export type CompanyUpdate = Partial<CompanyInput & { active: boolean }>;
+
+export function updateCompany(id: string, update: CompanyUpdate): Promise<Company> {
+  return apiFetch<Company>(`/companies/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(update),
+  });
+}

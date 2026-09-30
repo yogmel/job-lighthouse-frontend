@@ -1,17 +1,42 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { createCompany, type Company } from "@/lib/api/companies";
+import type { Company, CompanyInput } from "@/lib/api/companies";
 import { toFormErrors, type FormErrors } from "@/lib/api/errors";
-import { COMPANY_FIELDS, CompanyFields, readCompanyInput, type CompanyField } from "./company-fields";
+import {
+  COMPANY_FIELDS,
+  CompanyFields,
+  readCompanyInput,
+  type CompanyDefaults,
+  type CompanyField,
+} from "./company-fields";
 import { Modal } from "./modal";
 
 type Props = {
-  onCreated: (company: Company) => void;
+  title: string;
+  /** Submit button text, and its text while the request runs. */
+  submitLabel: string;
+  pendingLabel: string;
+  idPrefix: string;
+  defaults?: CompanyDefaults;
+  tierHint?: (tier: number) => string | undefined;
+  save: (input: CompanyInput) => Promise<Company>;
+  onSaved: (company: Company) => void;
   onClose: () => void;
 };
 
-export function AddCompanyForm({ onCreated, onClose }: Props) {
+/** Add/edit company form in a dialog; maps backend errors onto its fields. */
+export function CompanyDialog({
+  title,
+  submitLabel,
+  pendingLabel,
+  idPrefix,
+  defaults,
+  tierHint,
+  save,
+  onSaved,
+  onClose,
+}: Props) {
   const [pending, setPending] = useState(false);
   const [errors, setErrors] = useState<FormErrors<CompanyField>>({ fieldErrors: {} });
 
@@ -23,7 +48,7 @@ export function AddCompanyForm({ onCreated, onClose }: Props) {
     setPending(true);
     setErrors({ fieldErrors: {} });
     try {
-      onCreated(await createCompany(input));
+      onSaved(await save(input));
     } catch (err) {
       setErrors(toFormErrors(err, COMPANY_FIELDS));
       setPending(false);
@@ -31,10 +56,15 @@ export function AddCompanyForm({ onCreated, onClose }: Props) {
   }
 
   return (
-    <Modal title="Add company" onClose={onClose}>
+    <Modal title={title} onClose={onClose}>
       <form onSubmit={submit}>
         <div className="flex flex-col gap-4 px-6 py-6">
-          <CompanyFields idPrefix="add" errors={errors.fieldErrors} />
+          <CompanyFields
+            idPrefix={idPrefix}
+            defaults={defaults}
+            errors={errors.fieldErrors}
+            tierHint={tierHint}
+          />
           {errors.formError && (
             <p role="alert" className="text-sm text-danger">
               {errors.formError}
@@ -50,7 +80,7 @@ export function AddCompanyForm({ onCreated, onClose }: Props) {
             disabled={pending}
             className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {pending ? "Adding…" : "Add company"}
+            {pending ? pendingLabel : submitLabel}
           </button>
         </div>
       </form>
