@@ -346,9 +346,9 @@ location?: string;
 
 | Method   | Path                          | Description                                              |
 | -------- | ----------------------------- | --------------------------------------------------------- |
-| `POST`   | `/auth/signup`                | create account (email+password or Google)                |
+| `POST`   | `/auth/signup`                | create an email+password account, issue JWT              |
 | `POST`   | `/auth/login`                 | authenticate, issue JWT                                  |
-| `POST`   | `/auth/google`                | Google OAuth callback                                     |
+| `POST`   | `/auth/google`                | verify a Google ID token, find/link/create account, issue JWT |
 | `POST`   | `/auth/password-reset/request`| send a password-reset email                              |
 | `POST`   | `/auth/password-reset/confirm`| set a new password from a reset token                    |
 | `GET`    | `/account`                    | fetch own account details                                |
@@ -367,22 +367,47 @@ location?: string;
 | `GET`    | `/runs`                       | run history for the dashboard                            |
 | `GET`    | `/runs/{id}/companies`        | per-company breakdown for one run (`RunCompanyResult`)   |
 
-### Auth request/response shapes
+### Auth & account request/response shapes
 
-Frontend is built against these (FE-001, FE-002); BE-011/012/013 should match.
+The frontend is built against these (FE-001, FE-002, FE-003). They match the
+backend code on `main` as of BE-011 – BE-015.
 
-| Endpoint             | Request body                   | Success                                          |
-| -------------------- | ------------------------------ | ------------------------------------------------ |
-| `POST /auth/signup`  | `{ email, password }`          | `201 { access_token, token_type: "bearer" }`     |
-| `POST /auth/login`   | `{ email, password }`          | `200 { access_token, token_type: "bearer" }`     |
-| `POST /auth/google`  | `{ id_token }` (Google ID token from Google Identity Services) | `200 { access_token, token_type: "bearer" }` |
+| Endpoint            | Request body                                        | Success                                      |
+| ------------------- | --------------------------------------------------- | -------------------------------------------- |
+| `POST /auth/signup` | `{ email, password }`                               | `201 { access_token, token_type: "bearer" }` |
+| `POST /auth/login`  | `{ email, password }`                               | `200 { access_token, token_type: "bearer" }` |
+| `POST /auth/google` | `{ id_token }` (from Google Identity Services)      | `200 { access_token, token_type: "bearer" }` |
+| `GET /account`      | none                                                | `200 Account`                                |
+| `PUT /account`      | `{ current_password?, email?, new_password? }` (at least one of `email`, `new_password`) | `200 Account` |
 
-- `access_token` is the JWT; its payload carries `user_id` and `exp`.
-- Errors use FastAPI's `{ detail }` shape:
-  - `409 { detail: "Email already registered" }` — signup with an existing email
-  - `422 { detail: [{ loc: ["body", "<field>"], msg }] }` — validation; the frontend shows `msg` under `<field>`
-  - `401 { detail: "..." }` — bad credentials or Google token
-- CORS on both services must allow the frontend origin (browser calls them directly).
+- `Account` is `{ id, email, email_verified, has_password, google_linked, created_at }`.
+- `access_token` is the JWT. Its payload carries `sub` (the user id), `iat`
+  and `exp`. Send it as `Authorization: Bearer <token>` to both services.
+- Errors use FastAPI's `{ detail }` shape. `detail` strings are
+  human-readable and shown as-is. Don't match on their exact text.
+  - `401 { detail }`:
+    - bad credentials on login;
+    - an invalid Google token;
+    - a missing, invalid or expired JWT on any protected route. **This is the
+      only status that logs the user out.**
+  - `403 { detail }`: `PUT /account` with a missing or wrong
+    `current_password`. The frontend shows it on the current-password field
+    and keeps the session.
+  - `409 { detail }`:
+    - signup with an email that's already registered;
+    - `PUT /account` to an email another account uses;
+    - `/auth/google` when the email matches an existing account but Google
+      says it's **unverified**, or when the email is already linked to a
+      **different** Google account. A verified email is linked and returns
+      200.
+  - `422 { detail: [{ loc: ["body", "<field>"], msg }] }`: validation. The
+    frontend shows `msg` under `<field>`.
+  - `503 { detail }`: `/auth/google` when `GOOGLE_CLIENT_ID` isn't set on the
+    server.
+- **CORS:** the browser calls both services directly from the Vercel origin,
+  so both must answer preflight `OPTIONS` requests and allow that origin with
+  the `Authorization` and `Content-Type` headers. **Not implemented yet**; see
+  TASKS.md → v0.2 follow-ups.
 
 ---
 
@@ -567,6 +592,56 @@ every other table.
 signing secret — no network call to the Auth module per request. The token
 carries `user_id`, which is already the join key on every table, so
 authorization is just "does this row's `user_id` match the token's."
+
+### Decisions made while building v0.2 (BE-011 – BE-015)
+
+- **JWT:** HS256, with `sub` = `user_id`, `iat` and `exp`. The secret is
+  `JWT_SECRET` and both services must use the same value. Tokens last
+  `JWT_TTL_SECONDS`, 7 days by default.
+- **Passwords:** hashed with Argon2id and must be 8–256 characters long.
+  Login still runs a hash check when the email is unknown, so response time
+  doesn't reveal whether the account exists.
+- **Signup returns a token** (201), so the user is logged in straight away
+  (FE-001).
+- **Signup's 409 on a duplicate email reveals that the email is
+  registered.** BE-011 asks for it. The "don't reveal" rule covers only
+  login and password reset.
+- **Login** gives the same 401 for an unknown email, a wrong password and a
+  Google-only account.
+- **Google sign-in** (`POST /auth/google`):
+  - The ID token is checked against `GOOGLE_CLIENT_ID`. If that variable is
+    not set, the route returns 503.
+  - It first looks up the account by `google_id`.
+  - If there's no match, it links to an existing account with the same email
+    **only if Google says the email is verified**. Otherwise it returns 409,
+    so an unverified Google account can't take over a password account.
+  - It also returns 409 if that email is already linked to another Google
+    account.
+- **`PUT /account`:**
+  - If the account has a password, changing the email or password needs
+    `current_password`.
+  - A missing or wrong `current_password` returns **403**, not 401, so the
+    frontend doesn't treat it as an expired session.
+  - Google-only accounts can change their email or set a first password with
+    just their token.
+  - Changing the email sets `email_verified = false`. An email already used
+    by another account returns 409.
+- **Responses** always go through a response model. An account is returned
+  as `id, email, email_verified, has_password, google_linked, created_at`.
+  `password_hash` is never included.
+
+### Open questions (v0.2 auth)
+
+- **Signup 409:** keep it (current behaviour, as BE-011 asks), or switch to
+  a neutral response plus an email once email sending exists (v0.6)?
+- **Linking Google to an existing password account:** is "Google says the
+  email is verified" enough? Or should the user also confirm with their
+  password?
+- **First password on a Google-only account:** it currently needs only a
+  valid token. Should it need a fresh Google sign-in instead?
+- **403 for a wrong `current_password`:** resolved. The frontend agrees:
+  FE-003 logs out only on 401, and a 403 is shown on the current-password
+  field. See API design → Auth & account request/response shapes.
 
 ---
 
