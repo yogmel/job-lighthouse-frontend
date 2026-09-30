@@ -190,3 +190,87 @@ describe("CompaniesScreen · add company", () => {
     expect(screen.queryByRole("row", { name: /Acme/ })).not.toBeInTheDocument();
   });
 });
+
+describe("CompaniesScreen · edit company", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function openEdit(name: string) {
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: `Actions for ${name}` }));
+    await user.click(screen.getByRole("menuitem", { name: "Edit company" }));
+    return { user, dialog: screen.getByRole("dialog", { name: `Edit ${name}` }) };
+  }
+
+  it("prefills the dialog from the row", async () => {
+    mockApi([HALDEN, NORTHSTAR]);
+    render(<CompaniesScreen />);
+
+    const { dialog } = await openEdit("Halden");
+    expect(within(dialog).getByLabelText("Name")).toHaveValue("Halden");
+    expect(within(dialog).getByLabelText("Website")).toHaveValue("https://halden.example");
+    expect(within(dialog).getByLabelText("Tier 1")).toBeChecked();
+    expect(within(dialog).getByLabelText("Board")).toHaveValue("ashby");
+    expect(within(dialog).getByLabelText("Board id")).toHaveValue("halden");
+  });
+
+  it("prefills scraper selectors", async () => {
+    mockApi([NORTHSTAR]);
+    render(<CompaniesScreen />);
+
+    const { dialog } = await openEdit("Northstar");
+    expect(within(dialog).getByLabelText("Scraper")).toBeChecked();
+    expect(within(dialog).getByLabelText("Careers URL")).toHaveValue("https://northstar.example/jobs");
+    expect(within(dialog).getByLabelText("Job card selector")).toHaveValue(".job");
+  });
+
+  it("shows the re-group note only while the tier differs", async () => {
+    mockApi([HALDEN]);
+    render(<CompaniesScreen />);
+
+    const { user, dialog } = await openEdit("Halden");
+    const note = /re-groups this company's existing jobs/;
+    expect(within(dialog).queryByText(note)).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByLabelText("Tier 2"));
+    expect(within(dialog).getByText(note)).toBeInTheDocument();
+
+    await user.click(within(dialog).getByLabelText("Tier 1"));
+    expect(within(dialog).queryByText(note)).not.toBeInTheDocument();
+  });
+
+  it("puts the edited company and updates its row", async () => {
+    const updated: Company = { ...HALDEN, name: "Halden AB", tier: 2 };
+    const spy = mockApi([HALDEN], { "PUT /companies/c1": () => json(200, updated) });
+    render(<CompaniesScreen />);
+
+    const { user, dialog } = await openEdit("Halden");
+    await user.clear(within(dialog).getByLabelText("Name"));
+    await user.type(within(dialog).getByLabelText("Name"), "Halden AB");
+    await user.click(within(dialog).getByLabelText("Tier 2"));
+    await user.click(within(dialog).getByRole("button", { name: "Save changes" }));
+
+    const row = (await screen.findByText("Halden AB")).closest("tr")!;
+    expect(within(row).getByText("Tier 2")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Halden AB updated. Now Tier 2.");
+    expect(sentBody(spy, "PUT /companies/c1")).toEqual({
+      name: "Halden AB",
+      tier: 2,
+      website_url: "https://halden.example",
+      source: { kind: "board", board: "ashby", board_id: "halden" },
+    });
+  });
+
+  it("keeps the dialog open with the error when saving fails", async () => {
+    mockApi([HALDEN], { "PUT /companies/c1": () => json(404, { detail: "Company not found" }) });
+    render(<CompaniesScreen />);
+
+    const { user, dialog } = await openEdit("Halden");
+    await user.click(within(dialog).getByRole("button", { name: "Save changes" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Company not found");
+    expect(screen.getByText("Halden")).toBeInTheDocument();
+  });
+});

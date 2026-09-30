@@ -22,6 +22,9 @@ export const COMPANY_FIELDS = [
 ] as const;
 export type CompanyField = (typeof COMPANY_FIELDS)[number];
 
+/** Prefill values; `source` is absent when it can't be edited here (`custom`). */
+export type CompanyDefaults = Omit<CompanyInput, "source"> & { source?: EditableSource };
+
 type Errors = Partial<Record<CompanyField, string>>;
 
 function text(formData: FormData, name: CompanyField): string {
@@ -65,14 +68,18 @@ const selectClass =
 
 type Props = {
   idPrefix: string;
-  defaults?: CompanyInput;
+  defaults?: CompanyDefaults;
   errors?: Errors;
+  /** Note under the tier picker for the selected tier, if any. */
+  tierHint?: (tier: number) => string | undefined;
 };
 
 /** Name, website, tier and an explicit source: a job board or a scraper. */
-export function CompanyFields({ idPrefix, defaults, errors = {} }: Props) {
+export function CompanyFields({ idPrefix, defaults, errors = {}, tierHint }: Props) {
   const source = defaults?.source;
   const [kind, setKind] = useState<EditableSource["kind"]>(source?.kind ?? "board");
+  const [tier, setTier] = useState(defaults?.tier ?? 2);
+  const hint = tierHint?.(tier);
   const board = source?.kind === "board" ? source : undefined;
   const scraper = source?.kind === "scraper" ? source : undefined;
   const id = (name: string) => `${idPrefix}-${name}`;
@@ -95,22 +102,24 @@ export function CompanyFields({ idPrefix, defaults, errors = {} }: Props) {
       <fieldset className="flex flex-col gap-1.5">
         <legend className="mb-1.5 text-sm font-medium">Tier</legend>
         <div className="flex gap-2">
-          {TIERS.map((tier) => (
+          {TIERS.map((option) => (
             <label
-              key={tier}
+              key={option}
               className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border border-divider bg-field px-3 py-2 text-sm has-checked:border-accent has-checked:font-semibold"
             >
               <input
                 type="radio"
                 name="tier"
-                value={tier}
-                defaultChecked={(defaults?.tier ?? 2) === tier}
+                value={option}
+                checked={tier === option}
+                onChange={() => setTier(option)}
                 className="accent-accent"
               />
-              Tier {tier}
+              Tier {option}
             </label>
           ))}
         </div>
+        {hint && <p className="text-xs text-muted">{hint}</p>}
         {errors.tier && <p className="text-sm text-danger">{errors.tier}</p>}
       </fieldset>
 
