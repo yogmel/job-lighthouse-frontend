@@ -218,8 +218,8 @@ Verify credentials, issue a signed JWT carrying `user_id`.
 
 **Target:** backend **Version:** v0.2
 
-Google OAuth callback: verify token, find-or-create `Users` row by
-`google_id`, issue JWT.
+Verify the Google ID token the frontend posts (from Google Identity
+Services), find-or-create `Users` row by `google_id`, issue JWT.
 
 **Acceptance criteria:**
 
@@ -306,6 +306,23 @@ security-sensitive code).
 - Type and Semgrep checks are required on `main` and green on the current code
 - Coverage percentage visible on every PR
 - Dashboard decision recorded here (tool chosen or explicitly skipped)
+
+### v0.2 follow-ups
+
+BE-011 – BE-015 are merged. Still to do:
+
+- **Open questions:** see SYSTEM_DESIGN.md → Auth & accounts → Open
+  questions. Update the code and that section once each is decided.
+- **`.env.example`:** add `JWT_SECRET` (required) and `GOOGLE_CLIENT_ID`
+  (optional), matching the README env block.
+- **CORS (blocks the deployed frontend):** neither service adds CORS
+  headers, and neither does Nginx. Browser calls from the Vercel origin fail
+  their preflight check, including FE-001 and FE-002 signup and login. Add
+  `CORSMiddleware` in the shared `create_app`. Read allowed origins from an
+  env var (e.g. `CORS_ALLOWED_ORIGINS`), and allow the `Authorization` and
+  `Content-Type` headers. Document the env var in `.env.example` and DEPLOY.md.
+- **Running tests locally:** use `make test`. Plain `uv run pytest` doesn't
+  load `.env`, so every DB test is skipped and the run still looks green.
 
 ---
 
