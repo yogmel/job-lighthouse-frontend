@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getToken, clearToken } from "@/lib/session";
@@ -81,6 +81,26 @@ describe("LoginForm", () => {
     await fillAndSubmit();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/can't reach the server/i);
+  });
+
+  it("returns to the page from ?next= after login", async () => {
+    mockFetch(200, { access_token: TOKEN, token_type: "bearer" });
+    cleanup();
+    render(<LoginForm next="/settings?tab=profile" />);
+
+    await fillAndSubmit();
+
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/settings?tab=profile"));
+  });
+
+  it("ignores an off-site ?next=", async () => {
+    mockFetch(200, { access_token: TOKEN, token_type: "bearer" });
+    cleanup();
+    render(<LoginForm next="//evil.example" />);
+
+    await fillAndSubmit();
+
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/setup"));
   });
 
   it("links to sign up", () => {

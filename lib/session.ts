@@ -21,6 +21,16 @@ export function tokenExpiry(token: string): number | null {
   }
 }
 
+/**
+ * True when the token has a readable `exp` in the future. Does not check the
+ * signature — the backend does that and answers 401. Safe to call server-side.
+ */
+export function isTokenUsable(token: string | null | undefined, nowMs = Date.now()): boolean {
+  if (!token) return false;
+  const exp = tokenExpiry(token);
+  return exp !== null && exp * 1000 > nowMs;
+}
+
 function cookieAttributes(maxAge: number): string {
   const secure = window.location.protocol === "https:" ? "; Secure" : "";
   return `Path=/; Max-Age=${maxAge}; SameSite=Lax${secure}`;

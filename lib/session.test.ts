@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { clearToken, getToken, setToken, tokenExpiry } from "./session";
+import { clearToken, getToken, isTokenUsable, setToken, tokenExpiry } from "./session";
 
 function jwt(payload: object): string {
   const b64url = (v: object) =>
@@ -16,6 +16,15 @@ describe("session", () => {
   it("reads exp from the token payload", () => {
     expect(tokenExpiry(jwt({ user_id: "u1", exp: 1_900_000_000 }))).toBe(1_900_000_000);
     expect(tokenExpiry("not-a-jwt")).toBeNull();
+  });
+
+  it("treats only tokens with a future exp as usable", () => {
+    const now = 1_800_000_000;
+    expect(isTokenUsable(jwt({ exp: now + 1 }), now * 1000)).toBe(true);
+    expect(isTokenUsable(jwt({ exp: now }), now * 1000)).toBe(false);
+    expect(isTokenUsable(jwt({ sub: "u1" }), now * 1000)).toBe(false);
+    expect(isTokenUsable("garbage", now * 1000)).toBe(false);
+    expect(isTokenUsable(undefined, now * 1000)).toBe(false);
   });
 
   it("stores and reads the token", () => {

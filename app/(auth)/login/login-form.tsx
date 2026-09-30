@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useActionState, useState } from "react";
 import { googleAuth, login, type TokenResponse } from "@/lib/api/auth";
 import { toFormErrors, type FormErrors } from "@/lib/api/errors";
+import { safeNextPath } from "@/lib/routes";
 import { setToken } from "@/lib/session";
 import { GoogleButton } from "../google-button";
 import { TextField } from "../text-field";
@@ -16,16 +17,18 @@ type State = FormErrors<Field> & { email: string };
 
 const initialState: State = { fieldErrors: {}, email: "" };
 
-/** Where a returning user lands; points at the Jobs board once it exists (v0.4). */
-export const AFTER_LOGIN_PATH = "/setup";
+type Props = {
+  /** Page to return to after login, from `?next=`; validated before use. */
+  next?: string;
+};
 
-export function LoginForm() {
+export function LoginForm({ next }: Props) {
   const router = useRouter();
   const [googleError, setGoogleError] = useState<string>();
 
   function onAuthenticated({ access_token }: TokenResponse) {
     setToken(access_token);
-    router.replace(AFTER_LOGIN_PATH);
+    router.replace(safeNextPath(next));
   }
 
   async function submit(_prev: State, formData: FormData): Promise<State> {

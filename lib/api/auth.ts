@@ -8,6 +8,7 @@ export type TokenResponse = {
 export function signup(email: string, password: string): Promise<TokenResponse> {
   return apiFetch<TokenResponse>("/auth/signup", {
     method: "POST",
+    auth: false,
     body: JSON.stringify({ email, password }),
   });
 }
@@ -15,6 +16,7 @@ export function signup(email: string, password: string): Promise<TokenResponse> 
 export function login(email: string, password: string): Promise<TokenResponse> {
   return apiFetch<TokenResponse>("/auth/login", {
     method: "POST",
+    auth: false,
     body: JSON.stringify({ email, password }),
   });
 }
@@ -22,6 +24,7 @@ export function login(email: string, password: string): Promise<TokenResponse> {
 export function googleAuth(idToken: string): Promise<TokenResponse> {
   return apiFetch<TokenResponse>("/auth/google", {
     method: "POST",
+    auth: false,
     body: JSON.stringify({ id_token: idToken }),
   });
 }
