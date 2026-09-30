@@ -369,7 +369,7 @@ location?: string;
 
 ### Auth request/response shapes
 
-Frontend is built against these (FE-001); BE-011/012/013 should match.
+Frontend is built against these (FE-001, FE-002); BE-011/012/013 should match.
 
 | Endpoint             | Request body                   | Success                                          |
 | -------------------- | ------------------------------ | ------------------------------------------------ |

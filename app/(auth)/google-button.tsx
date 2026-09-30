@@ -3,6 +3,8 @@
 import Script from "next/script";
 import { useCallback, useEffect, useRef } from "react";
 
+type GoogleButtonText = "signup_with" | "signin_with";
+
 /** Minimal slice of the Google Identity Services API we use. */
 type GoogleId = {
   initialize(options: {
@@ -11,7 +13,7 @@ type GoogleId = {
   }): void;
   renderButton(
     parent: HTMLElement,
-    options: { type: "standard"; text: "signup_with"; theme: "outline"; size: "large"; width: number },
+    options: { type: "standard"; text: GoogleButtonText; theme: "outline"; size: "large"; width: number },
   ): void;
 };
 
@@ -22,10 +24,12 @@ declare global {
 }
 
 type Props = {
+  /** Button label: "Sign up with Google" or "Sign in with Google". */
+  text: GoogleButtonText;
   onCredential: (idToken: string) => void;
 };
 
-export function GoogleButton({ onCredential }: Props) {
+export function GoogleButton({ text, onCredential }: Props) {
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   const containerRef = useRef<HTMLDivElement>(null);
   // Keep the latest callback without re-initialising GIS on every render.
@@ -44,17 +48,17 @@ export function GoogleButton({ onCredential }: Props) {
     });
     gis.renderButton(container, {
       type: "standard",
-      text: "signup_with",
+      text,
       theme: "outline",
       size: "large",
       width: container.clientWidth || 320,
     });
-  }, [clientId]);
+  }, [clientId, text]);
 
   if (!clientId) {
     return (
       <p className="text-center text-xs text-muted">
-        Google sign-up is not configured.
+        Google sign-in is not configured.
       </p>
     );
   }
