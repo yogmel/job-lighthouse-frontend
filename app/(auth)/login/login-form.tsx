@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useState } from "react";
-import { googleAuth, signup, type TokenResponse } from "@/lib/api/auth";
+import { googleAuth, login, type TokenResponse } from "@/lib/api/auth";
 import { toFormErrors, type FormErrors } from "@/lib/api/errors";
 import { setToken } from "@/lib/session";
 import { GoogleButton } from "../google-button";
@@ -16,16 +16,16 @@ type State = FormErrors<Field> & { email: string };
 
 const initialState: State = { fieldErrors: {}, email: "" };
 
-/** Where a new account lands; the real Setup screen is a later ticket. */
-export const AFTER_SIGNUP_PATH = "/setup";
+/** Where a returning user lands; points at the Jobs board once it exists (v0.4). */
+export const AFTER_LOGIN_PATH = "/setup";
 
-export function SignupForm() {
+export function LoginForm() {
   const router = useRouter();
   const [googleError, setGoogleError] = useState<string>();
 
   function onAuthenticated({ access_token }: TokenResponse) {
     setToken(access_token);
-    router.replace(AFTER_SIGNUP_PATH);
+    router.replace(AFTER_LOGIN_PATH);
   }
 
   async function submit(_prev: State, formData: FormData): Promise<State> {
@@ -33,7 +33,7 @@ export function SignupForm() {
     const password = String(formData.get("password") ?? "");
     setGoogleError(undefined);
     try {
-      onAuthenticated(await signup(email, password));
+      onAuthenticated(await login(email, password));
       return { fieldErrors: {}, email };
     } catch (err) {
       return { ...toFormErrors(err, FIELDS), email };
@@ -56,7 +56,7 @@ export function SignupForm() {
 
   return (
     <div className="mt-6 flex flex-col gap-6">
-      <GoogleButton text="signup_with" onCredential={onGoogleCredential} />
+      <GoogleButton text="signin_with" onCredential={onGoogleCredential} />
 
       <div className="flex items-center gap-3 text-xs text-muted" aria-hidden="true">
         <span className="h-px flex-1 bg-divider" />
@@ -66,7 +66,7 @@ export function SignupForm() {
 
       <form action={formAction} className="flex flex-col gap-4">
         <TextField
-          idPrefix="signup"
+          idPrefix="login"
           name="email"
           label="Email"
           type="email"
@@ -75,11 +75,11 @@ export function SignupForm() {
           error={fieldErrors.email}
         />
         <TextField
-          idPrefix="signup"
+          idPrefix="login"
           name="password"
           label="Password"
           type="password"
-          autoComplete="new-password"
+          autoComplete="current-password"
           error={fieldErrors.password}
         />
 
@@ -94,14 +94,14 @@ export function SignupForm() {
           disabled={pending}
           className="rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {pending ? "Creating account…" : "Create account"}
+          {pending ? "Logging in…" : "Log in"}
         </button>
       </form>
 
       <p className="text-center text-sm text-muted">
-        Already have an account?{" "}
-        <Link href="/login" className="font-semibold text-foreground underline underline-offset-2">
-          Log in
+        New to Job Lighthouse?{" "}
+        <Link href="/signup" className="font-semibold text-foreground underline underline-offset-2">
+          Create an account
         </Link>
       </p>
     </div>

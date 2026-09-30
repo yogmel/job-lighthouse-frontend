@@ -12,6 +12,13 @@ export function signup(email: string, password: string): Promise<TokenResponse> 
   });
 }
 
+export function login(email: string, password: string): Promise<TokenResponse> {
+  return apiFetch<TokenResponse>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
 export function googleAuth(idToken: string): Promise<TokenResponse> {
   return apiFetch<TokenResponse>("/auth/google", {
     method: "POST",
