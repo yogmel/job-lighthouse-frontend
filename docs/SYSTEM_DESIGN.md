@@ -377,11 +377,16 @@ Frontend is built against these (FE-001, FE-002); BE-011/012/013 should match.
 | `POST /auth/login`   | `{ email, password }`          | `200 { access_token, token_type: "bearer" }`     |
 | `POST /auth/google`  | `{ id_token }` (Google ID token from Google Identity Services) | `200 { access_token, token_type: "bearer" }` |
 
-- `access_token` is the JWT; its payload carries `user_id` and `exp`.
-- Errors use FastAPI's `{ detail }` shape:
-  - `409 { detail: "Email already registered" }` — signup with an existing email
+- `access_token` is the JWT; its payload carries `sub` (the user id), `iat`
+  and `exp`.
+- Errors use FastAPI's `{ detail }` shape. `detail` strings are
+  human-readable and shown as-is; don't match on their exact text:
+  - `409 { detail: "..." }` — signup with an existing email, or Google
+    sign-in for an email that already has a password account
   - `422 { detail: [{ loc: ["body", "<field>"], msg }] }` — validation; the frontend shows `msg` under `<field>`
   - `401 { detail: "..." }` — bad credentials or Google token
+  - `503 { detail: "..." }` — `/auth/google` when Google sign-in isn't
+    configured on the server
 - CORS on both services must allow the frontend origin (browser calls them directly).
 
 ---
