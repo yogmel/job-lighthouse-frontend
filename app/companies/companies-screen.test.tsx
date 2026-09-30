@@ -274,3 +274,97 @@ describe("CompaniesScreen · edit company", () => {
     expect(screen.getByText("Halden")).toBeInTheDocument();
   });
 });
+
+describe("CompaniesScreen · pause and remove", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function chooseAction(name: string, action: string) {
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: `Actions for ${name}` }));
+    await user.click(screen.getByRole("menuitem", { name: action }));
+    return user;
+  }
+
+  it("pauses with a partial PUT and keeps the row", async () => {
+    const spy = mockApi([HALDEN], {
+      "PUT /companies/c1": () => json(200, { ...HALDEN, active: false }),
+    });
+    render(<CompaniesScreen />);
+
+    await chooseAction("Halden", "Pause watching");
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Halden paused.");
+    const row = screen.getByText("Halden").closest("tr")!;
+    expect(within(row).getByText("Paused")).toBeInTheDocument();
+    expect(sentBody(spy, "PUT /companies/c1")).toEqual({ active: false });
+    expect(spy.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+  });
+
+  it("resumes a paused company", async () => {
+    const spy = mockApi([NORTHSTAR], {
+      "PUT /companies/c2": () => json(200, { ...NORTHSTAR, active: true }),
+    });
+    render(<CompaniesScreen />);
+
+    await chooseAction("Northstar", "Resume watching");
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Northstar resumed.");
+    expect(within(screen.getByText("Northstar").closest("tr")!).getByText("Active")).toBeInTheDocument();
+    expect(sentBody(spy, "PUT /companies/c2")).toEqual({ active: true });
+  });
+
+  it("shows an alert when pausing fails", async () => {
+    mockApi([HALDEN], { "PUT /companies/c1": () => json(500, { detail: "boom" }) });
+    render(<CompaniesScreen />);
+
+    await chooseAction("Halden", "Pause watching");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong");
+    expect(within(screen.getByText("Halden").closest("tr")!).getByText("Active")).toBeInTheDocument();
+  });
+
+  it("asks for confirmation before removing", async () => {
+    const spy = mockApi([HALDEN, NORTHSTAR], {
+      "DELETE /companies/c1": () => new Response(null, { status: 204 }),
+    });
+    render(<CompaniesScreen />);
+
+    const user = await chooseAction("Halden", "Remove company");
+    const dialog = screen.getByRole("dialog", { name: "Remove Halden?" });
+    expect(spy).toHaveBeenCalledTimes(1); // only the list load
+
+    await user.click(within(dialog).getByRole("button", { name: "Remove company" }));
+
+    await vi.waitFor(() => expect(screen.queryByText("Halden")).not.toBeInTheDocument());
+    expect(screen.getByRole("status")).toHaveTextContent("Halden removed.");
+    expect(screen.getByText("Northstar")).toBeInTheDocument();
+    expect(spy.mock.calls[1][0]).toBe("http://api.test/companies/c1");
+    expect(spy.mock.calls[1][1]?.method).toBe("DELETE");
+  });
+
+  it("sends nothing when removal is cancelled", async () => {
+    const spy = mockApi([HALDEN]);
+    render(<CompaniesScreen />);
+
+    const user = await chooseAction("Halden", "Remove company");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("Halden")).toBeInTheDocument();
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the row and shows the error when removal fails", async () => {
+    mockApi([HALDEN], { "DELETE /companies/c1": () => json(404, { detail: "Company not found" }) });
+    render(<CompaniesScreen />);
+
+    const user = await chooseAction("Halden", "Remove company");
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Remove company" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Company not found");
+    expect(screen.getByText("Halden")).toBeInTheDocument();
+  });
+});

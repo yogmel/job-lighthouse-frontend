@@ -60,3 +60,11 @@ export function updateCompany(id: string, update: CompanyUpdate): Promise<Compan
     body: JSON.stringify(update),
   });
 }
+
+/**
+ * Not in SYSTEM_DESIGN.md's API table yet; assumed to be
+ * `DELETE /companies/{id}` answering 204.
+ */
+export async function deleteCompany(id: string): Promise<void> {
+  await apiFetch<null>(`/companies/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
