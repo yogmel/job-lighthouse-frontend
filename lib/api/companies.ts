@@ -33,3 +33,20 @@ export type Company = {
 export function listCompanies(): Promise<Company[]> {
   return apiFetch<Company[]>("/companies");
 }
+
+/** Sources the manual form can set; `custom` needs a developer (v0.10). */
+export type EditableSource = Exclude<Source, { kind: "custom" }>;
+
+export type CompanyInput = {
+  name: string;
+  tier: number;
+  website_url: string;
+  source: EditableSource;
+};
+
+export function createCompany(input: CompanyInput): Promise<Company> {
+  return apiFetch<Company>("/companies", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}

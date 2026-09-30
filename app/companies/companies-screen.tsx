@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { listCompanies, type Company } from "@/lib/api/companies";
 import { toFormErrors } from "@/lib/api/errors";
+import { AddCompanyForm } from "./add-company-form";
 import { CompaniesTable } from "./companies-table";
 
 type State =
@@ -22,6 +23,8 @@ function summary(companies: Company[]): string {
 
 export function CompaniesScreen() {
   const [state, setState] = useState<State>({ status: "loading" });
+  const [adding, setAdding] = useState(false);
+  const [banner, setBanner] = useState<string>();
 
   useEffect(() => {
     let cancelled = false;
@@ -34,12 +37,40 @@ export function CompaniesScreen() {
     };
   }, []);
 
+  function onCreated(company: Company) {
+    setState((prev) =>
+      prev.status === "ready" ? { ...prev, companies: [...prev.companies, company] } : prev,
+    );
+    setAdding(false);
+    setBanner(`${company.name} added.`);
+  }
+
   return (
     <>
-      <div className="flex flex-col gap-1">
-        <h1 className="font-heading text-3xl">Companies</h1>
-        {state.status === "ready" && state.companies.length > 0 && (
-          <p className="text-sm text-muted">{summary(state.companies)}</p>
+      {banner && (
+        <p
+          role="status"
+          className="rounded-md border border-accent/40 bg-surface px-4 py-3 text-sm font-semibold"
+        >
+          {banner}
+        </p>
+      )}
+
+      <div className="flex items-end justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="font-heading text-3xl">Companies</h1>
+          {state.status === "ready" && state.companies.length > 0 && (
+            <p className="text-sm text-muted">{summary(state.companies)}</p>
+          )}
+        </div>
+        {state.status === "ready" && (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-strong"
+          >
+            + Add company
+          </button>
         )}
       </div>
 
@@ -62,6 +93,8 @@ export function CompaniesScreen() {
         ) : (
           <CompaniesTable companies={state.companies} />
         ))}
+
+      {adding && <AddCompanyForm onCreated={onCreated} onClose={() => setAdding(false)} />}
     </>
   );
 }

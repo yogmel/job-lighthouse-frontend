@@ -1,4 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Company } from "@/lib/api/companies";
 import { CompaniesScreen } from "./companies-screen";
@@ -38,6 +39,32 @@ function mockFetch(status: number, body: unknown) {
   );
 }
 
+function json(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+/** Answers `GET /companies` with `list`, and other calls from `routes` by "METHOD /path". */
+function mockApi(list: Company[], routes: Record<string, () => Response> = {}) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input).replace("http://api.test", "");
+    const key = `${init?.method ?? "GET"} ${path}`;
+    if (key === "GET /companies") return json(200, list);
+    const route = routes[key];
+    if (!route) throw new Error(`Unexpected request: ${key}`);
+    return route();
+  });
+}
+
+function sentBody(spy: ReturnType<typeof mockApi>, key: string): unknown {
+  const call = spy.mock.calls.find(
+    ([input, init]) => `${init?.method ?? "GET"} ${String(input).replace("http://api.test", "")}` === key,
+  );
+  return call ? JSON.parse(String(call[1]?.body)) : undefined;
+}
+
 describe("CompaniesScreen", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -75,5 +102,91 @@ describe("CompaniesScreen", () => {
     render(<CompaniesScreen />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/can't reach the server/i);
+  });
+});
+
+describe("CompaniesScreen · add company", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("posts a board-backed company and shows the new row", async () => {
+    const created: Company = { ...HALDEN, id: "c9", name: "Acme", tier: 2, source: { kind: "board", board: "greenhouse", board_id: "acme" } };
+    const spy = mockApi([HALDEN], { "POST /companies": () => json(201, created) });
+    const user = userEvent.setup();
+    render(<CompaniesScreen />);
+
+    await user.click(await screen.findByRole("button", { name: "+ Add company" }));
+    const dialog = screen.getByRole("dialog", { name: "Add company" });
+    await user.type(within(dialog).getByLabelText("Name"), "Acme");
+    await user.type(within(dialog).getByLabelText("Website"), "https://acme.example");
+    await user.click(within(dialog).getByLabelText("Tier 2"));
+    await user.selectOptions(within(dialog).getByLabelText("Board"), "greenhouse");
+    await user.type(within(dialog).getByLabelText("Board id"), "acme");
+    await user.click(within(dialog).getByRole("button", { name: "Add company" }));
+
+    const row = (await screen.findByText("Acme")).closest("tr")!;
+    expect(within(row).getByText("greenhouse")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Acme added.");
+    expect(sentBody(spy, "POST /companies")).toEqual({
+      name: "Acme",
+      tier: 2,
+      website_url: "https://acme.example",
+      source: { kind: "board", board: "greenhouse", board_id: "acme" },
+    });
+  });
+
+  it("posts a scraper source with its selectors", async () => {
+    const spy = mockApi([], { "POST /companies": () => json(201, NORTHSTAR) });
+    const user = userEvent.setup();
+    render(<CompaniesScreen />);
+
+    await user.click(await screen.findByRole("button", { name: "+ Add company" }));
+    const dialog = screen.getByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Name"), "Northstar");
+    await user.type(within(dialog).getByLabelText("Website"), "https://northstar.example");
+    await user.click(within(dialog).getByLabelText("Tier 3"));
+    await user.click(within(dialog).getByLabelText("Scraper"));
+    expect(within(dialog).queryByLabelText("Board id")).not.toBeInTheDocument();
+    await user.selectOptions(within(dialog).getByLabelText("Strategy"), "dynamic");
+    await user.type(within(dialog).getByLabelText("Careers URL"), "https://northstar.example/jobs");
+    await user.type(within(dialog).getByLabelText("Job card selector"), ".job");
+    await user.type(within(dialog).getByLabelText("Title selector"), "h3");
+    await user.type(within(dialog).getByLabelText("Link selector"), "a");
+    await user.click(within(dialog).getByRole("button", { name: "Add company" }));
+
+    expect(await screen.findByText("Northstar")).toBeInTheDocument();
+    expect(sentBody(spy, "POST /companies")).toEqual({
+      name: "Northstar",
+      tier: 3,
+      website_url: "https://northstar.example",
+      source: {
+        kind: "scraper",
+        strategy: "dynamic",
+        selectors: { careers_url: "https://northstar.example/jobs", job: ".job", title: "h3", link: "a" },
+      },
+    });
+  });
+
+  it("shows a nested validation error under its field and keeps the input", async () => {
+    mockApi([], {
+      "POST /companies": () =>
+        json(422, { detail: [{ loc: ["body", "source", "board", "board_id"], msg: "Field required" }] }),
+    });
+    const user = userEvent.setup();
+    render(<CompaniesScreen />);
+
+    await user.click(await screen.findByRole("button", { name: "+ Add company" }));
+    const dialog = screen.getByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Name"), "Acme");
+    await user.type(within(dialog).getByLabelText("Website"), "https://acme.example");
+    await user.type(within(dialog).getByLabelText("Board id"), " ");
+    await user.click(within(dialog).getByRole("button", { name: "Add company" }));
+
+    expect(await within(dialog).findByText("Field required")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Board id")).toHaveAttribute("aria-invalid", "true");
+    expect(within(dialog).getByLabelText("Name")).toHaveValue("Acme");
+    expect(screen.queryByRole("row", { name: /Acme/ })).not.toBeInTheDocument();
   });
 });
