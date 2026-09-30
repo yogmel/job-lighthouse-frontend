@@ -28,6 +28,8 @@ export function toFormErrors<Field extends string>(
     return { fieldErrors: {}, formError: NETWORK_ERROR };
   }
   if (!(err instanceof ApiError)) {
+    // Not from the backend (e.g. missing config): surface it for debugging.
+    console.error(err);
     return { fieldErrors: {}, formError: GENERIC_ERROR };
   }
 

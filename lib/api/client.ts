@@ -63,9 +63,12 @@ export async function apiFetch<T>(
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
 
+  // Outside the try: a missing base URL is a config bug, not a network failure.
+  const url = `${baseUrl()}${path}`;
+
   let res: Response;
   try {
-    res = await fetch(`${baseUrl()}${path}`, { ...init, headers });
+    res = await fetch(url, { ...init, headers });
   } catch (err) {
     throw new NetworkError(err);
   }
