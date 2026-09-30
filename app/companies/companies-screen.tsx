@@ -11,6 +11,7 @@ import { toFormErrors } from "@/lib/api/errors";
 import { CompaniesTable } from "./companies-table";
 import { CompanyDialog } from "./company-dialog";
 import type { CompanyDefaults } from "./company-fields";
+import { RemoveCompanyDialog } from "./remove-company-dialog";
 import type { RowMenuItem } from "./row-menu";
 
 type State =
@@ -36,7 +37,9 @@ export function CompaniesScreen() {
   const [state, setState] = useState<State>({ status: "loading" });
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Company>();
+  const [removing, setRemoving] = useState<Company>();
   const [banner, setBanner] = useState<string>();
+  const [actionError, setActionError] = useState<string>();
 
   useEffect(() => {
     let cancelled = false;
@@ -75,8 +78,35 @@ export function CompaniesScreen() {
     );
   }
 
+  /** Pausing keeps the row and its jobs; runs just skip the company. */
+  async function setActive(company: Company, active: boolean) {
+    setActionError(undefined);
+    try {
+      replaceCompany(await updateCompany(company.id, { active }));
+      setBanner(`${company.name} ${active ? "resumed" : "paused"}.`);
+    } catch (err) {
+      setActionError(errorMessage(err));
+    }
+  }
+
+  function onRemoved(company: Company) {
+    setState((prev) =>
+      prev.status === "ready"
+        ? { ...prev, companies: prev.companies.filter((c) => c.id !== company.id) }
+        : prev,
+    );
+    setRemoving(undefined);
+    setBanner(`${company.name} removed.`);
+  }
+
   function menuItems(company: Company): RowMenuItem[] {
-    return [{ label: "Edit company", onSelect: () => setEditing(company) }];
+    return [
+      { label: "Edit company", onSelect: () => setEditing(company) },
+      company.active
+        ? { label: "Pause watching", onSelect: () => setActive(company, false) }
+        : { label: "Resume watching", onSelect: () => setActive(company, true) },
+      { label: "Remove company", onSelect: () => setRemoving(company), danger: true },
+    ];
   }
 
   return (
@@ -87,6 +117,12 @@ export function CompaniesScreen() {
           className="rounded-md border border-accent/40 bg-surface px-4 py-3 text-sm font-semibold"
         >
           {banner}
+        </p>
+      )}
+
+      {actionError && (
+        <p role="alert" className="text-sm text-danger">
+          {actionError}
         </p>
       )}
 
@@ -156,6 +192,15 @@ export function CompaniesScreen() {
           save={(input) => updateCompany(editing.id, input)}
           onSaved={(company) => onUpdated(editing, company)}
           onClose={() => setEditing(undefined)}
+        />
+      )}
+
+      {removing && (
+        <RemoveCompanyDialog
+          key={removing.id}
+          company={removing}
+          onRemoved={onRemoved}
+          onClose={() => setRemoving(undefined)}
         />
       )}
     </>
