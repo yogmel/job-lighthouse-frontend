@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useActionState, useState } from "react";
 import { googleAuth, signup, type TokenResponse } from "@/lib/api/auth";
 import { toFormErrors, type FormErrors } from "@/lib/api/errors";
+import { AFTER_AUTH_PATH } from "@/lib/routes";
 import { setToken } from "@/lib/session";
 import { GoogleButton } from "../google-button";
 import { TextField } from "../text-field";
@@ -16,16 +17,13 @@ type State = FormErrors<Field> & { email: string };
 
 const initialState: State = { fieldErrors: {}, email: "" };
 
-/** Where a new account lands; the real Setup screen is a later ticket. */
-export const AFTER_SIGNUP_PATH = "/setup";
-
 export function SignupForm() {
   const router = useRouter();
   const [googleError, setGoogleError] = useState<string>();
 
   function onAuthenticated({ access_token }: TokenResponse) {
     setToken(access_token);
-    router.replace(AFTER_SIGNUP_PATH);
+    router.replace(AFTER_AUTH_PATH);
   }
 
   async function submit(_prev: State, formData: FormData): Promise<State> {
