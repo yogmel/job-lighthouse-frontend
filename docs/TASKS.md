@@ -635,7 +635,7 @@ NULL`; stamp `notified_at` only after provider confirms success.
 - Empty digest set sends no email
 - A failed send leaves `notified_at` null so those jobs reappear next digest
 
-### FE-010 · Settings → Notifications tab
+### ~~FE-010 · Settings → Notifications tab~~
 
 **Target:** frontend **Version:** v0.6
 
