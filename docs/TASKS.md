@@ -635,11 +635,38 @@ NULL`; stamp `notified_at` only after provider confirms success.
 - Empty digest set sends no email
 - A failed send leaves `notified_at` null so those jobs reappear next digest
 
-### FE-010 · Settings → Notifications tab
+### BE-047 · Config notification preferences
+
+**Target:** backend **Version:** v0.6
+
+Store the Settings → Notifications preferences (FE-010) on `Config` and have
+the digest honor them.
+
+- `notify_email: bool` (default `true`): digest on/off
+- `notify_empty_company: bool` (default `true`): warn when a company returns
+  nothing
+- `notify_min_score: int` 0–100 (default `40`): digest includes only jobs
+  scoring above it; lower-scoring jobs stay on the board
+
+**Depends on:** BE-027 (`GET/PUT /config`), BE-030 (digest send).
+
+**Acceptance criteria:**
+
+- Migration adds the three columns with the defaults above
+- `GET /config` returns them; `PUT /config` accepts them and rejects
+  `notify_min_score` outside 0–100 with 422
+- Digest is skipped when `notify_email = false`
+- Digest excludes jobs at or below `notify_min_score`; they still appear in
+  `GET /jobs`
+- Recorded decision: whether filtered-out jobs get `notified_at` stamped
+
+### ~~FE-010 · Settings → Notifications tab~~
 
 **Target:** frontend **Version:** v0.6
 
 Notification preferences screen — no Notion-mirror toggle (retired).
+
+**Depends on:** BE-047 (stores the preferences).
 
 **Acceptance criteria:**
 
