@@ -34,7 +34,8 @@ function mockApi(
   });
 }
 
-const nextRun = () => screen.getByText(/Next run:/).textContent ?? "";
+const nextRun = () => screen.getByText(/Next run/).textContent ?? "";
+const freq = (name: string) => screen.getByRole("radio", { name });
 
 describe("ScheduleTab", () => {
   beforeEach(() => {
@@ -50,19 +51,29 @@ describe("ScheduleTab", () => {
     mockApi();
     render(<ScheduleTab />);
 
-    expect(await screen.findByLabelText("Frequency")).toHaveValue("daily");
+    expect(await screen.findByRole("radio", { name: "Daily" })).toBeChecked();
     expect(screen.getByLabelText("Time (UTC)")).toHaveValue("07:00");
-    expect(screen.getByText("0 7 * * *")).toBeInTheDocument();
-    expect(nextRun()).toMatch(/2026/);
+    expect(screen.getByLabelText("Cron expression")).toHaveValue("0 7 * * *");
+    expect(nextRun()).toBe("Next run Fri 2 Oct, 07:00 UTC — about 2h from now.");
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
-  it("opens an unrecognised cron in the raw editor", async () => {
+  it("opens an unrecognised cron as Custom cron", async () => {
     mockApi({ ...CONFIG, cron: "15 8 1,15 * *" });
     render(<ScheduleTab />);
 
-    expect(await screen.findByLabelText("Frequency")).toHaveValue("custom");
+    expect(await screen.findByRole("radio", { name: "Custom cron" })).toBeChecked();
     expect(screen.getByLabelText("Cron expression")).toHaveValue("15 8 1,15 * *");
+    expect(screen.queryByLabelText("Time (UTC)")).not.toBeInTheDocument();
+  });
+
+  it("recognises a weekly schedule", async () => {
+    mockApi({ ...CONFIG, cron: "30 6 * * 3" });
+    render(<ScheduleTab />);
+
+    expect(await screen.findByRole("radio", { name: "Weekly" })).toBeChecked();
+    expect(screen.getByLabelText("Day")).toHaveValue("3");
+    expect(screen.getByLabelText("Time (UTC)")).toHaveValue("06:30");
   });
 
   it("saves a preset via PUT /config, keeping the other fields", async () => {
@@ -71,7 +82,8 @@ describe("ScheduleTab", () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<ScheduleTab />);
 
-    await user.selectOptions(await screen.findByLabelText("Frequency"), "weekdays");
+    await user.click(await screen.findByRole("radio", { name: "Weekdays" }));
+    expect(screen.getByLabelText("Cron expression")).toHaveValue("0 7 * * 1-5");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(await screen.findByRole("status")).toHaveTextContent("Schedule saved");
@@ -82,38 +94,37 @@ describe("ScheduleTab", () => {
       cron: "0 7 * * 1-5",
       profile: "# Profile",
     });
+    expect(freq("Weekdays")).toBeChecked();
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
-  it("updates the next-run estimate as the schedule changes", async () => {
+  it("updates the cron and next-run estimate as the schedule changes", async () => {
     mockApi();
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<ScheduleTab />);
 
-    await user.selectOptions(await screen.findByLabelText("Frequency"), "hours");
-    expect(screen.getByText("0 */6 * * *")).toBeInTheDocument();
-    const sixHourly = nextRun();
-
-    await user.selectOptions(screen.getByLabelText("Hours between runs"), "12");
-    expect(screen.getByText("0 */12 * * *")).toBeInTheDocument();
-    expect(nextRun()).not.toBe(sixHourly);
+    await user.click(await screen.findByRole("radio", { name: "Weekly" }));
+    await user.selectOptions(screen.getByLabelText("Day"), "1");
+    expect(screen.getByLabelText("Cron expression")).toHaveValue("0 7 * * 1");
+    expect(nextRun()).toMatch(/Mon 5 Oct, 07:00 UTC/);
   });
 
-  it("saves a raw cron override", async () => {
+  it("saves a raw cron override typed into the cron field", async () => {
     const put = vi.fn((body: unknown) => json(200, { ...CONFIG, ...(body as object) }));
     mockApi(CONFIG, put);
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<ScheduleTab />);
 
-    await user.selectOptions(await screen.findByLabelText("Frequency"), "custom");
-    const raw = screen.getByLabelText("Cron expression");
-    expect(raw).toHaveValue("0 7 * * *");
+    const raw = await screen.findByLabelText("Cron expression");
     await user.clear(raw);
-    await user.type(raw, "30 6 * * 1");
+    await user.type(raw, "30 6 * * 2");
+    expect(freq("Custom cron")).toBeChecked();
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await screen.findByRole("status");
-    expect(put).toHaveBeenCalledWith(expect.objectContaining({ cron: "30 6 * * 1" }));
+    expect(put).toHaveBeenCalledWith(expect.objectContaining({ cron: "30 6 * * 2" }));
+    // 30 6 * * 2 is a valid weekly schedule, so it reopens as one.
+    expect(freq("Weekly")).toBeChecked();
   });
 
   it("blocks saving an invalid cron", async () => {
@@ -122,8 +133,7 @@ describe("ScheduleTab", () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<ScheduleTab />);
 
-    await user.selectOptions(await screen.findByLabelText("Frequency"), "custom");
-    const raw = screen.getByLabelText("Cron expression");
+    const raw = await screen.findByLabelText("Cron expression");
     await user.clear(raw);
     await user.type(raw, "99 * * * *");
 
@@ -140,8 +150,7 @@ describe("ScheduleTab", () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<ScheduleTab />);
 
-    await user.selectOptions(await screen.findByLabelText("Frequency"), "custom");
-    const raw = screen.getByLabelText("Cron expression");
+    const raw = await screen.findByLabelText("Cron expression");
     await user.clear(raw);
     await user.type(raw, "* * * * *");
     await user.click(screen.getByRole("button", { name: "Save" }));
