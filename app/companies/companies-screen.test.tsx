@@ -367,4 +367,15 @@ describe("CompaniesScreen · pause and remove", () => {
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("Company not found");
     expect(screen.getByText("Halden")).toBeInTheDocument();
   });
+
+  it("shows the added banner with a link to the jobs board", async () => {
+    mockApi([HALDEN]);
+    render(
+      <CompaniesScreen justAdded={{ name: "Acme", found: 34, matched: 3, via: "greenhouse" }} />,
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Acme added. Watching 34 openings via Greenhouse — 3 pass your filters and are already scored.",
+    );
+    expect(screen.getByRole("link", { name: "View jobs" })).toHaveAttribute("href", "/jobs");
+  });
 });

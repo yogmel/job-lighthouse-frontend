@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
-import { detectCompany, type Detection } from "@/lib/api/companies";
+import { detectCompany, type Company, type Detection } from "@/lib/api/companies";
 import { toFormErrors } from "@/lib/api/errors";
 import { TIERS } from "../company-fields";
+import { ConfirmCard } from "./confirm-card";
 import { ResolvingCard } from "./resolving-card";
 
 type Step =
@@ -32,7 +34,29 @@ function withScheme(raw: string): string {
   return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
 }
 
+/** Site root for `website_url`; detection doesn't return one. */
+function websiteOf(raw: string): string {
+  try {
+    return new URL(withScheme(raw)).origin;
+  } catch {
+    return withScheme(raw);
+  }
+}
+
+/** The banner on the Companies list is built from these query params. */
+export function addedUrl(company: Company, detection: Detection): string {
+  const via = detection.source.kind === "board" ? detection.source.board : "scraper";
+  const params = new URLSearchParams({
+    added: company.name,
+    found: String(detection.jobs_found),
+    matched: String(detection.jobs_matched),
+    via,
+  });
+  return `/companies?${params}`;
+}
+
 export function AddCompanyScreen() {
+  const router = useRouter();
   const [step, setStep] = useState<Step>({ status: "paste" });
   const [name, setName] = useState("");
   const [tier, setTier] = useState(2);
@@ -176,10 +200,14 @@ export function AddCompanyScreen() {
       )}
 
       {step.status === "resolved" && (
-        <p role="status" className="rounded-md border border-accent/40 bg-surface px-4 py-3 text-sm">
-          Detected {step.detection.source.kind === "board" ? step.detection.source.board : "a scraper"}{" "}
-          for {displayHost(step.url)}: {step.detection.jobs_found} openings found.
-        </p>
+        <ConfirmCard
+          name={step.name}
+          tier={step.tier}
+          websiteUrl={websiteOf(step.url)}
+          detection={step.detection}
+          onBack={() => setStep({ status: "paste" })}
+          onAdded={(company) => router.push(addedUrl(company, step.detection))}
+        />
       )}
     </>
   );
