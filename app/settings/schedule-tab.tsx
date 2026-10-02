@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { getConfig, toConfigInput, updateConfig, type Config } from "@/lib/api/config";
-import { isValidCron, nextCronRun } from "@/lib/cron";
+import { formatUtc, isValidCron, nextCronRun, untilLabel } from "@/lib/cron";
 import { toFormErrors } from "@/lib/api/errors";
 
 type State =
@@ -48,26 +48,6 @@ function toCron({ mode, time, day, raw }: Draft): string {
   const dow = mode === "weekdays" ? "1-5" : mode === "weekly" ? day : "*";
   return `${m} ${h} * * ${dow}`;
 }
-
-/** "about 4h 12m", "about 25m" */
-function untilLabel(ms: number): string {
-  const minutes = Math.max(1, Math.round(ms / 60_000));
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h >= 48) return `about ${Math.round(h / 24)} days`;
-  return `about ${h > 0 ? `${h}h ` : ""}${m}m`.replace(" 0m", "");
-}
-
-// The cron runs in UTC, so show the estimate in UTC too.
-const nextRunFormat = new Intl.DateTimeFormat("en-GB", {
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-  timeZone: "UTC",
-});
 
 function errorMessage(err: unknown): string {
   return toFormErrors(err, []).formError ?? "Something went wrong. Please try again.";
@@ -254,7 +234,7 @@ export function ScheduleTab() {
 
       <p className="rounded-md border border-accent/40 bg-surface px-4 py-3 text-sm">
         Next run{" "}
-        <strong>{next ? `${nextRunFormat.format(next)} UTC` : "—"}</strong>
+        <strong>{next ? formatUtc(next) : "—"}</strong>
         {next && ` — ${untilLabel(next.getTime() - now.getTime())} from now.`}
       </p>
 

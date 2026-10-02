@@ -96,3 +96,28 @@ export function nextCronRun(expression: string, from: Date): Date | null {
   }
   return null;
 }
+
+/** "about 4h 12m", "about 25m" */
+export function untilLabel(ms: number): string {
+  const minutes = Math.max(1, Math.round(ms / 60_000));
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h >= 48) return `about ${Math.round(h / 24)} days`;
+  return `about ${h > 0 ? `${h}h ` : ""}${m}m`.replace(" 0m", "");
+}
+
+// The cron runs in UTC, so schedule times are shown in UTC too.
+const utcFormat = new Intl.DateTimeFormat("en-GB", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+  timeZone: "UTC",
+});
+
+/** "Fri 2 Oct, 07:00 UTC" */
+export function formatUtc(date: Date): string {
+  return `${utcFormat.format(date)} UTC`;
+}
