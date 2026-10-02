@@ -34,12 +34,19 @@ function summary(companies: Company[]): string {
   return paused > 0 ? `${watched} watched · ${paused} paused` : `${watched} watched`;
 }
 
-export function CompaniesScreen() {
+export type JustAdded = { name: string; found: number; matched: number; via: string };
+
+function addedBanner({ name, found, matched, via }: JustAdded): string {
+  const board = via.charAt(0).toUpperCase() + via.slice(1);
+  return `${name} added. Watching ${found} openings via ${board} — ${matched} pass your filters and are already scored.`;
+}
+
+export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
   const [state, setState] = useState<State>({ status: "loading" });
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Company>();
   const [removing, setRemoving] = useState<Company>();
-  const [banner, setBanner] = useState<string>();
+  const [banner, setBanner] = useState<string | undefined>(justAdded && addedBanner(justAdded));
   const [actionError, setActionError] = useState<string>();
 
   useEffect(() => {
@@ -118,6 +125,11 @@ export function CompaniesScreen() {
           className="rounded-md border border-accent/40 bg-surface px-4 py-3 text-sm font-semibold"
         >
           {banner}
+          {justAdded && banner === addedBanner(justAdded) && (
+            <Link href="/jobs" className="ml-3 underline">
+              View jobs
+            </Link>
+          )}
         </p>
       )}
 

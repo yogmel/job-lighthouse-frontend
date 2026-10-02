@@ -1,6 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+
 import type { Detection } from "@/lib/api/companies";
 import { AddCompanyScreen } from "./add-company-screen";
 
@@ -19,7 +23,10 @@ function json(status: number, body: unknown): Response {
   });
 }
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  push.mockReset();
+});
 
 describe("AddCompanyScreen", () => {
   it("disables the button until a URL is pasted", async () => {
@@ -49,7 +56,7 @@ describe("AddCompanyScreen", () => {
     expect(JSON.parse(String(init?.body))).toEqual({ url: "https://acme.com/careers" });
 
     resolve(json(200, DETECTION));
-    expect(await screen.findByText(/Detected greenhouse/)).toBeInTheDocument();
+    expect(await screen.findByText("3 of 34 openings pass your filters")).toBeInTheDocument();
   });
 
   it("returns to the paste step with the error when detection fails", async () => {
@@ -80,5 +87,67 @@ describe("AddCompanyScreen", () => {
 
     expect(screen.getByLabelText("Careers URL")).toHaveValue("acme.com/careers");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  describe("confirm", () => {
+    async function resolve(user: ReturnType<typeof userEvent.setup>, fetchMock: ReturnType<typeof vi.spyOn>) {
+      fetchMock.mockResolvedValueOnce(json(200, DETECTION));
+      render(<AddCompanyScreen />);
+      await user.type(screen.getByLabelText("Careers URL"), "acme.com/careers");
+      await user.click(screen.getByRole("button", { name: "Find their jobs" }));
+      await screen.findByText("3 of 34 openings pass your filters");
+    }
+
+    it("shows the scored sample and what was filtered out", async () => {
+      const user = userEvent.setup();
+      await resolve(user, vi.spyOn(globalThis, "fetch"));
+      expect(screen.getByText("Staff Frontend Engineer")).toBeInTheDocument();
+      expect(screen.getByText("88")).toBeInTheDocument();
+      expect(screen.getByText(/31 filtered out/)).toBeInTheDocument();
+      expect(screen.getByLabelText("Name")).toHaveValue("Acme");
+    });
+
+    it("persists the detected source as given, then goes to the list with the banner", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.spyOn(globalThis, "fetch");
+      await resolve(user, fetchMock);
+      fetchMock.mockResolvedValueOnce(json(201, { id: "c9", name: "Acme" }));
+
+      await user.click(screen.getByLabelText("Tier 1"));
+      await user.click(screen.getByRole("button", { name: "Start watching" }));
+
+      const [url, init] = fetchMock.mock.calls[1];
+      expect(String(url)).toMatch(/\/companies$/);
+      expect(init?.method).toBe("POST");
+      expect(JSON.parse(String(init?.body))).toEqual({
+        name: "Acme",
+        tier: 1,
+        website_url: "https://acme.com",
+        source: DETECTION.source,
+      });
+      expect(push).toHaveBeenCalledWith(
+        "/companies?added=Acme&found=34&matched=3&via=greenhouse",
+      );
+    });
+
+    it("keeps the confirm screen and shows the error when saving fails", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.spyOn(globalThis, "fetch");
+      await resolve(user, fetchMock);
+      fetchMock.mockResolvedValueOnce(json(409, "Company already exists"));
+
+      await user.click(screen.getByRole("button", { name: "Start watching" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("Company already exists");
+      expect(push).not.toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "Start watching" })).toBeEnabled();
+    });
+
+    it("Back returns to the paste step", async () => {
+      const user = userEvent.setup();
+      await resolve(user, vi.spyOn(globalThis, "fetch"));
+      await user.click(screen.getByRole("button", { name: "Back" }));
+      expect(screen.getByLabelText("Careers URL")).toHaveValue("acme.com/careers");
+    });
   });
 });
