@@ -21,3 +21,22 @@ export type Run = {
 export function triggerRun(): Promise<Run> {
   return apiFetch<Run>("/runs", { method: "POST" });
 }
+
+export function listRuns(): Promise<Run[]> {
+  return apiFetch<Run[]>("/runs");
+}
+
+/** One company's outcome in one run. */
+export type RunCompanyResult = {
+  id: string;
+  run_id: string;
+  company_id: string;
+  /** `skipped`: not fetched this run (e.g. paused). */
+  status: "ok" | "failed" | "skipped";
+  jobs_found: number;
+  error: string | null;
+};
+
+export function listRunCompanies(runId: string): Promise<RunCompanyResult[]> {
+  return apiFetch<RunCompanyResult[]>(`/runs/${encodeURIComponent(runId)}/companies`);
+}
