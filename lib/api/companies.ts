@@ -68,3 +68,35 @@ export function updateCompany(id: string, update: CompanyUpdate): Promise<Compan
 export async function deleteCompany(id: string): Promise<void> {
   await apiFetch<null>(`/companies/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
+
+/** One opening from the detect sample, already scored against the user's profile. */
+export type SampleJob = {
+  title: string;
+  url: string;
+  match_score: number;
+};
+
+/**
+ * Draft returned by `POST /companies/detect`. Not persisted: confirming sends
+ * exactly this `source` to `POST /companies`. Field names beyond `source`
+ * and the sample aren't in SYSTEM_DESIGN.md yet; assumed here.
+ */
+export type Detection = {
+  /** Best guess from the page; may be empty. */
+  name: string;
+  source: EditableSource;
+  /** Openings read from the source. */
+  jobs_found: number;
+  /** Openings that pass the user's keyword/location filters. */
+  jobs_matched: number;
+  sample: SampleJob[];
+};
+
+/** Pass `signal` to abort a slow detection (the agent step can take seconds). */
+export function detectCompany(url: string, signal?: AbortSignal): Promise<Detection> {
+  return apiFetch<Detection>("/companies/detect", {
+    method: "POST",
+    body: JSON.stringify({ url }),
+    signal,
+  });
+}

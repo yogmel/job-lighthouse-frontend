@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   createCompany,
@@ -134,13 +135,21 @@ export function CompaniesScreen() {
           )}
         </div>
         {state.status === "ready" && (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-strong"
-          >
-            + Add company
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/companies/new"
+              className="rounded-md px-4 py-2 text-sm font-semibold transition-colors hover:bg-surface"
+            >
+              Add from URL
+            </Link>
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-strong"
+            >
+              + Add company
+            </button>
+          </div>
         )}
       </div>
 
