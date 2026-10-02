@@ -2,12 +2,20 @@
 
 export const LOGIN_PATH = "/login";
 export const SIGNUP_PATH = "/signup";
+export const FORGOT_PASSWORD_PATH = "/forgot-password";
+/** Target of the emailed reset link; the token rides in `?token=`. */
+export const RESET_PASSWORD_PATH = "/reset-password";
 
 /** Where a signed-in user lands; points at the Jobs board once it exists (v0.4). */
 export const AFTER_AUTH_PATH = "/setup";
 
 /** Routes reachable without a session. Everything else needs one. */
-export const PUBLIC_PATHS: readonly string[] = [LOGIN_PATH, SIGNUP_PATH];
+export const PUBLIC_PATHS: readonly string[] = [
+  LOGIN_PATH,
+  SIGNUP_PATH,
+  FORGOT_PASSWORD_PATH,
+  RESET_PASSWORD_PATH,
+];
 
 export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));

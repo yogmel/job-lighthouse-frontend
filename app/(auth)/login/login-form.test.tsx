@@ -106,4 +106,11 @@ describe("LoginForm", () => {
   it("links to sign up", () => {
     expect(screen.getByRole("link", { name: "Create an account" })).toHaveAttribute("href", "/signup");
   });
+
+  it("links to the forgot-password page", () => {
+    expect(screen.getByRole("link", { name: "Forgot password?" })).toHaveAttribute(
+      "href",
+      "/forgot-password",
+    );
+  });
 });
