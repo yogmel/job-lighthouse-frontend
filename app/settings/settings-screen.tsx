@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { NotificationsTab } from "./notifications-tab";
 import { ProfileTab } from "./profile-tab";
+import { ScheduleTab } from "./schedule-tab";
 
 const TABS = [
+  { id: "schedule", label: "Schedule" },
   { id: "profile", label: "Profile" },
   { id: "notifications", label: "Notifications" },
 ] as const;
@@ -12,11 +14,11 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 /**
- * Settings shell. Filters, Schedule and Account arrive with their own
+ * Settings shell. Filters and Account arrive with their own
  * tickets.
  */
 export function SettingsScreen() {
-  const [tab, setTab] = useState<TabId>("profile");
+  const [tab, setTab] = useState<TabId>("schedule");
 
   return (
     <>
@@ -42,7 +44,9 @@ export function SettingsScreen() {
             ))}
           </ul>
         </nav>
-        {tab === "profile" ? <ProfileTab /> : <NotificationsTab />}
+        {tab === "schedule" && <ScheduleTab />}
+        {tab === "profile" && <ProfileTab />}
+        {tab === "notifications" && <NotificationsTab />}
       </div>
     </>
   );

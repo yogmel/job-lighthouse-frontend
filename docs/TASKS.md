@@ -698,7 +698,7 @@ BE-019 lock so they can't overlap.
 
 - A due tick during an in-flight manual run no-ops instead of double-running
 
-### FE-011 · Settings → Schedule tab
+### ~~FE-011 · Settings → Schedule tab~~
 
 **Target:** frontend **Version:** v0.7
 
