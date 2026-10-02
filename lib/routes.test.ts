@@ -17,6 +17,8 @@ describe("safeNextPath", () => {
     ["/\r/evil.example", "/setup"],
     ["/login", "/setup"],
     ["/signup?x=1", "/setup"],
+    ["/forgot-password", "/setup"],
+    ["/reset-password?token=abc", "/setup"],
   ])("%s → %s", (next, expected) => {
     expect(safeNextPath(next)).toBe(expected);
   });

@@ -15,6 +15,14 @@ function isValidationIssue(value: unknown): value is ValidationIssue {
 }
 
 /**
+ * True when the backend answered and refused the input (4xx). Flows that must
+ * not reveal whether an account or token exists treat these as success.
+ */
+export function isRejectedInput(err: unknown): boolean {
+  return err instanceof ApiError && err.status >= 400 && err.status < 500;
+}
+
+/**
  * Maps a backend error to form errors.
  * - 422: FastAPI validation list `[{ loc: ["body", field], msg }]` → per field
  * - 409 on signup: duplicate email → email field

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useActionState, useState } from "react";
 import { googleAuth, login, type TokenResponse } from "@/lib/api/auth";
 import { toFormErrors, type FormErrors } from "@/lib/api/errors";
-import { safeNextPath } from "@/lib/routes";
+import { FORGOT_PASSWORD_PATH, safeNextPath } from "@/lib/routes";
 import { setToken } from "@/lib/session";
 import { GoogleButton } from "../google-button";
 import { TextField } from "../text-field";
@@ -85,6 +85,12 @@ export function LoginForm({ next }: Props) {
           autoComplete="current-password"
           error={fieldErrors.password}
         />
+        <Link
+          href={FORGOT_PASSWORD_PATH}
+          className="-mt-2 self-end text-sm text-muted underline underline-offset-2 hover:text-foreground"
+        >
+          Forgot password?
+        </Link>
 
         {formError && (
           <p role="alert" className="text-sm text-danger">

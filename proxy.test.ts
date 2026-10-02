@@ -42,7 +42,7 @@ describe("proxy", () => {
     expect(res.headers.get("x-middleware-next")).toBe("1");
   });
 
-  it.each(["/login", "/signup"])("leaves %s public", (path) => {
+  it.each(["/login", "/signup", "/forgot-password", "/reset-password"])("leaves %s public", (path) => {
     const res = proxy(request(path));
     expect(res.headers.get("location")).toBeNull();
   });
