@@ -8,6 +8,37 @@ export function sourceLabel(source: Source): string {
   return source.kind === "board" ? source.board : source.kind;
 }
 
+/**
+ * Detection fell through to a `custom` source and no handler has shipped yet.
+ * The backend keeps these paused until a developer ships the handler; an
+ * active `custom` company means its handler is live.
+ */
+export function needsCustomHandling(company: Company): boolean {
+  return company.source.kind === "custom" && !company.active;
+}
+
+function Status({ company }: { company: Company }) {
+  if (needsCustomHandling(company)) {
+    return (
+      <span
+        title="Paused until a developer ships a handler for this company."
+        className="rounded-sm border border-dashed border-accent px-2 py-0.5 text-xs font-medium whitespace-nowrap text-accent-strong"
+      >
+        Needs custom handling
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span
+        aria-hidden="true"
+        className={`size-2 rounded-full ${company.active ? "bg-accent" : "border border-muted"}`}
+      />
+      {company.active ? "Active" : "Paused"}
+    </span>
+  );
+}
+
 type Props = {
   companies: Company[];
   /** Row menu actions for one company. */
@@ -52,15 +83,7 @@ export function CompaniesTable({ companies, menuItems }: Props) {
                 <time dateTime={company.added_at}>{dateFormat.format(new Date(company.added_at))}</time>
               </td>
               <td className="px-4 py-3">
-                <span className="inline-flex items-center gap-2">
-                  <span
-                    aria-hidden="true"
-                    className={`size-2 rounded-full ${
-                      company.active ? "bg-accent" : "border border-muted"
-                    }`}
-                  />
-                  {company.active ? "Active" : "Paused"}
-                </span>
+                <Status company={company} />
               </td>
               <td className="px-4 py-3 text-right">
                 <RowMenu name={company.name} items={menuItems(company)} />

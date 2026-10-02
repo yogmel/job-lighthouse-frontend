@@ -30,6 +30,17 @@ const NORTHSTAR: Company = {
   },
 };
 
+const ORBIT: Company = {
+  id: "c3",
+  user_id: "u1",
+  name: "Orbit",
+  tier: 2,
+  added_at: "2026-05-02T12:00:00Z",
+  website_url: "https://orbit.example",
+  active: false,
+  source: { kind: "custom", handler: "orbit" },
+};
+
 function mockFetch(status: number, body: unknown) {
   return vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(JSON.stringify(body), {
@@ -313,6 +324,41 @@ describe("CompaniesScreen · pause and remove", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("Northstar resumed.");
     expect(within(screen.getByText("Northstar").closest("tr")!).getByText("Active")).toBeInTheDocument();
     expect(sentBody(spy, "PUT /companies/c2")).toEqual({ active: true });
+  });
+
+  it("marks a paused custom company as needing custom handling", async () => {
+    mockFetch(200, [ORBIT, NORTHSTAR]);
+    render(<CompaniesScreen />);
+
+    const orbit = (await screen.findByText("Orbit")).closest("tr")!;
+    expect(within(orbit).getByText("Needs custom handling")).toBeInTheDocument();
+    expect(within(orbit).queryByText("Paused")).not.toBeInTheDocument();
+    expect(within(orbit).getByText("custom")).toBeInTheDocument();
+    // A plain paused company keeps the regular state.
+    const northstar = screen.getByText("Northstar").closest("tr")!;
+    expect(within(northstar).getByText("Paused")).toBeInTheDocument();
+  });
+
+  it("keeps a company that needs custom handling paused", async () => {
+    mockFetch(200, [ORBIT]);
+    render(<CompaniesScreen />);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Actions for Orbit" }));
+
+    const menu = screen.getByRole("menu", { name: "Orbit" });
+    expect(within(menu).queryByRole("menuitem", { name: "Resume watching" })).not.toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Edit company" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Remove company" })).toBeInTheDocument();
+  });
+
+  it("treats an active custom company as a normal row", async () => {
+    mockFetch(200, [{ ...ORBIT, active: true }]);
+    render(<CompaniesScreen />);
+
+    const orbit = (await screen.findByText("Orbit")).closest("tr")!;
+    expect(within(orbit).getByText("Active")).toBeInTheDocument();
+    expect(within(orbit).queryByText("Needs custom handling")).not.toBeInTheDocument();
   });
 
   it("shows an alert when pausing fails", async () => {

@@ -9,7 +9,7 @@ import {
   type Company,
 } from "@/lib/api/companies";
 import { toFormErrors } from "@/lib/api/errors";
-import { CompaniesTable } from "./companies-table";
+import { CompaniesTable, needsCustomHandling } from "./companies-table";
 import { CompanyDialog } from "./company-dialog";
 import type { CompanyDefaults } from "./company-fields";
 import { RemoveCompanyDialog } from "./remove-company-dialog";
@@ -108,12 +108,16 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
   }
 
   function menuItems(company: Company): RowMenuItem[] {
+    const edit = { label: "Edit company", onSelect: () => setEditing(company) };
+    const remove = { label: "Remove company", onSelect: () => setRemoving(company), danger: true };
+    // Resuming would only make runs fail: there is no handler to call yet.
+    if (needsCustomHandling(company)) return [edit, remove];
     return [
-      { label: "Edit company", onSelect: () => setEditing(company) },
+      edit,
       company.active
         ? { label: "Pause watching", onSelect: () => setActive(company, false) }
         : { label: "Resume watching", onSelect: () => setActive(company, true) },
-      { label: "Remove company", onSelect: () => setRemoving(company), danger: true },
+      remove,
     ];
   }
 
