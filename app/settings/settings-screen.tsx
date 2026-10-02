@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AccountTab } from "./account-tab";
 import { NotificationsTab } from "./notifications-tab";
 import { ProfileTab } from "./profile-tab";
 import { ScheduleTab } from "./schedule-tab";
@@ -9,14 +10,12 @@ const TABS = [
   { id: "schedule", label: "Schedule" },
   { id: "profile", label: "Profile" },
   { id: "notifications", label: "Notifications" },
+  { id: "account", label: "Account" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
 
-/**
- * Settings shell. Filters and Account arrive with their own
- * tickets.
- */
+/** Settings shell. Filters arrives with its own ticket. */
 export function SettingsScreen() {
   const [tab, setTab] = useState<TabId>("schedule");
 
@@ -47,6 +46,7 @@ export function SettingsScreen() {
         {tab === "schedule" && <ScheduleTab />}
         {tab === "profile" && <ProfileTab />}
         {tab === "notifications" && <NotificationsTab />}
+        {tab === "account" && <AccountTab />}
       </div>
     </>
   );
