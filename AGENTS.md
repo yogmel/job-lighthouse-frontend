@@ -26,8 +26,10 @@ Package manager is **bun** (`bun install`, `bun run dev`).
 - `docs/SYSTEM_DESIGN.md` — **contracts**: API endpoints (`## API design`),
   data shapes (`## Schemas`), screen flows (`## Frontend`). Read the matching
   section before calling an endpoint or rendering a model.
-- UI prototype (source of the screen flows):
-  <https://claude.ai/artifact/8p1rqwg8HLSur5rfV8D1WH>
+- `artifacts/job-lighthouse-prototype.html` — **UI prototype**, source of the
+  screen flows. Standalone; open it in a browser (hosted copy:
+  <https://claude.ai/artifact/8p1rqwg8HLSur5rfV8D1WH>). Check the matching
+  screen before building or changing UI.
 
 ## Architecture rules
 
