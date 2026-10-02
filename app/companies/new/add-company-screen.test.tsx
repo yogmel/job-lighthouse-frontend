@@ -43,7 +43,7 @@ describe("AddCompanyScreen", () => {
     await user.click(screen.getByRole("button", { name: "Find their jobs" }));
 
     expect(screen.getByText("Detecting the job board…")).toBeInTheDocument();
-    expect(screen.getByText("acme.com")).toBeInTheDocument();
+    expect(screen.getAllByText("acme.com")).toHaveLength(2);
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toMatch(/\/companies\/detect$/);
     expect(JSON.parse(String(init?.body))).toEqual({ url: "https://acme.com/careers" });
@@ -53,7 +53,7 @@ describe("AddCompanyScreen", () => {
   });
 
   it("returns to the paste step with the error when detection fails", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(json(502, "Could not fetch that page"));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(json(422, "Could not fetch that page"));
     const user = userEvent.setup();
     render(<AddCompanyScreen />);
 
