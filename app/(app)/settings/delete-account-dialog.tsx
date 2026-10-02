@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Modal } from "@/app/companies/modal";
+import { Modal } from "@/app/(app)/companies/modal";
 import { deleteAccount } from "@/lib/api/account";
 import { toFormErrors } from "@/lib/api/errors";
 

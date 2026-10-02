@@ -6,8 +6,9 @@ import { ApiError } from "@/lib/api/client";
 import { listCompanies, type Company } from "@/lib/api/companies";
 import { getConfig } from "@/lib/api/config";
 import { toFormErrors } from "@/lib/api/errors";
-import { listRunCompanies, listRuns, triggerRun, type Run, type RunCompanyResult } from "@/lib/api/runs";
+import { listRunCompanies, listRuns, type Run, type RunCompanyResult } from "@/lib/api/runs";
 import { formatUtc, nextCronRun, untilLabel } from "@/lib/cron";
+import { useRuns, withRun } from "../run-context";
 import { isSameUtcDay, plural, startedLabel } from "./format";
 import { needsAttention, RunBreakdown } from "./run-breakdown";
 
@@ -23,10 +24,6 @@ const ALREADY_RUNNING = "A run is already in progress.";
 
 function errorMessage(err: unknown): string {
   return toFormErrors(err, []).formError ?? "Something went wrong. Please try again.";
-}
-
-function newestFirst(runs: Run[]): Run[] {
-  return [...runs].sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at));
 }
 
 function Card({ kicker, value, detail }: { kicker: string; value: string; detail: string }) {
@@ -63,13 +60,15 @@ export function RunsScreen() {
   const [actionError, setActionError] = useState<string>();
   // Captured once so the estimates don't change between renders.
   const [now] = useState(() => new Date());
+  // Runs started from the header show up here too.
+  const { triggered, trigger } = useRuns();
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([listRuns(), listCompanies(), getConfig()]).then(
       ([runs, companies, config]) =>
         !cancelled &&
-        setState({ status: "ready", runs: newestFirst(runs), companies, cron: config.cron }),
+        setState({ status: "ready", runs, companies, cron: config.cron }),
       (err: unknown) => !cancelled && setState({ status: "error", message: errorMessage(err) }),
     );
     return () => {
@@ -77,7 +76,7 @@ export function RunsScreen() {
     };
   }, []);
 
-  const runs = state.status === "ready" ? state.runs : [];
+  const runs = state.status === "ready" ? withRun(state.runs, triggered) : [];
   const latest = runs[0];
   const selected = runs.find((r) => r.id === selectedId) ?? latest;
 
@@ -101,10 +100,8 @@ export function RunsScreen() {
     setBanner(undefined);
     setActionError(undefined);
     try {
-      const run = await triggerRun();
-      setState((prev) =>
-        prev.status === "ready" ? { ...prev, runs: newestFirst([run, ...prev.runs]) } : prev,
-      );
+      const run = await trigger();
+      setState((prev) => (prev.status === "ready" ? { ...prev, runs: withRun(prev.runs, run) } : prev));
       setSelectedId(run.id);
       setBanner(run.status === "running" ? "Run started." : "Run finished.");
     } catch (err) {
