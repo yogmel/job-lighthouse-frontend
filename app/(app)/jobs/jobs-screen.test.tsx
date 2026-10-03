@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Company } from "@/lib/api/companies";
 import type { Job } from "@/lib/api/jobs";
 import type { Run } from "@/lib/api/runs";
+import { RunProvider, useRuns } from "../run-context";
 import { JobsScreen } from "./jobs-screen";
 
 const HALDEN: Company = {
@@ -189,7 +190,6 @@ describe("JobsScreen", () => {
 
     expect(await screen.findByText("No jobs yet")).toBeInTheDocument();
     expect(screen.queryByLabelText("Status")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Run now" })).toBeInTheDocument();
   });
 
   it("does not link out to non-http job URLs", async () => {
@@ -208,26 +208,30 @@ describe("JobsScreen", () => {
   });
 });
 
-describe("JobsScreen · run now", () => {
+describe("JobsScreen · runs", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("calls POST /runs and reports a started run", async () => {
-    const spy = mockApi([FRONTEND], [HALDEN], { "POST /runs": () => json(202, RUN) });
-    const user = userEvent.setup();
+  /** Stands in for the header's Run now. */
+  function TriggerButton() {
+    const { trigger } = useRuns();
+    return (
+      <button type="button" onClick={() => trigger().catch(() => {})}>
+        Trigger
+      </button>
+    );
+  }
+
+  it("has no Run now of its own (the header has it)", async () => {
+    mockApi([FRONTEND], [HALDEN]);
     render(<JobsScreen />);
 
-    await user.click(await screen.findByRole("button", { name: "Run now" }));
-
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Run started. New jobs show up when it finishes.",
-    );
-    expect(calls(spy, "POST /runs")).toBe(1);
-    expect(screen.getByRole("button", { name: "Run now" })).toBeEnabled();
+    expect(await screen.findByText("Frontend Engineer")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Run now" })).not.toBeInTheDocument();
   });
 
-  it("reloads jobs when the run finished synchronously", async () => {
+  it("reloads jobs when a run started elsewhere finished synchronously", async () => {
     let jobs = [FRONTEND];
     const spy = mockApi(() => jobs, [HALDEN, NORTHSTAR], {
       "POST /runs": () => {
@@ -236,37 +240,34 @@ describe("JobsScreen · run now", () => {
       },
     });
     const user = userEvent.setup();
-    render(<JobsScreen />);
+    render(
+      <RunProvider>
+        <TriggerButton />
+        <JobsScreen />
+      </RunProvider>,
+    );
+    expect(await screen.findByText("Frontend Engineer")).toBeInTheDocument();
 
-    await user.click(await screen.findByRole("button", { name: "Run now" }));
+    await user.click(screen.getByRole("button", { name: "Trigger" }));
 
     expect(await screen.findByText("Platform Engineer")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Run finished. 1 new job.");
     expect(calls(spy, "GET /jobs")).toBe(2);
   });
 
-  it("treats a 409 as a run already in progress", async () => {
-    mockApi([FRONTEND], [HALDEN], {
-      "POST /runs": () => json(409, { detail: "Run already in progress" }),
-    });
+  it("doesn't reload jobs for a run that's still going", async () => {
+    const spy = mockApi([FRONTEND], [HALDEN], { "POST /runs": () => json(202, RUN) });
     const user = userEvent.setup();
-    render(<JobsScreen />);
+    render(
+      <RunProvider>
+        <TriggerButton />
+        <JobsScreen />
+      </RunProvider>,
+    );
+    expect(await screen.findByText("Frontend Engineer")).toBeInTheDocument();
 
-    await user.click(await screen.findByRole("button", { name: "Run now" }));
+    await user.click(screen.getByRole("button", { name: "Trigger" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent(/already in progress/);
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-
-  it("shows the error when the run failed", async () => {
-    mockApi([FRONTEND], [HALDEN], {
-      "POST /runs": () => json(200, { ...RUN, status: "failed", error: "lock timeout" }),
-    });
-    const user = userEvent.setup();
-    render(<JobsScreen />);
-
-    await user.click(await screen.findByRole("button", { name: "Run now" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent("Run failed: lock timeout");
+    await vi.waitFor(() => expect(calls(spy, "POST /runs")).toBe(1));
+    expect(calls(spy, "GET /jobs")).toBe(1);
   });
 });

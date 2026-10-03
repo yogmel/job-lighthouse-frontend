@@ -1,4 +1,4 @@
-import { sourceLabel } from "@/app/companies/companies-table";
+import { sourceLabel } from "@/app/(app)/companies/companies-table";
 import type { Company } from "@/lib/api/companies";
 import type { Run, RunCompanyResult } from "@/lib/api/runs";
 import { durationLabel, plural, startedLabel } from "./format";

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createCompany, type Company, type Detection } from "@/lib/api/companies";
 import { toFormErrors } from "@/lib/api/errors";
-import { safeHref } from "@/app/jobs/jobs-list";
+import { safeHref } from "@/app/(app)/jobs/jobs-list";
 import { TIERS } from "../company-fields";
 
 type Props = {

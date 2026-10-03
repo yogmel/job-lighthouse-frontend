@@ -41,7 +41,7 @@ describe("SignupForm", () => {
 
     await fillAndSubmit();
 
-    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/setup"));
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/jobs"));
     expect(getToken()).toBe(TOKEN);
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe("http://api.test/auth/signup");

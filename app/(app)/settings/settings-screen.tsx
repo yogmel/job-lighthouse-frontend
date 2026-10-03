@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AccountTab } from "./account-tab";
 import { NotificationsTab } from "./notifications-tab";
 import { ProfileTab } from "./profile-tab";
@@ -15,9 +15,22 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
-/** Settings shell. Filters arrives with its own ticket. */
+/** `?tab=` value to tab; anything unknown opens Schedule. */
+export function settingsTab(param: string | null): TabId {
+  return TABS.find(({ id }) => id === param)?.id ?? "schedule";
+}
+
+/**
+ * Settings shell. The open tab lives in `?tab=` so the header's Profile link
+ * can deep-link to it. Filters arrives with its own ticket.
+ */
 export function SettingsScreen() {
-  const [tab, setTab] = useState<TabId>("schedule");
+  const tab = settingsTab(useSearchParams().get("tab"));
+
+  // Native history updates sync with useSearchParams without a server round trip.
+  function setTab(id: TabId) {
+    window.history.replaceState(null, "", `?tab=${id}`);
+  }
 
   return (
     <>
