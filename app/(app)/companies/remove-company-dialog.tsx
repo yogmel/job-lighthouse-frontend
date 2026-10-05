@@ -4,7 +4,7 @@ import { useState } from "react";
 import { deleteCompany, type Company } from "@/lib/api/companies";
 import { ApiError } from "@/lib/api/client";
 import { toFormErrors } from "@/lib/api/errors";
-import { Modal } from "./modal";
+import { Modal } from "../modal";
 
 type Props = {
   company: Company;
