@@ -13,6 +13,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("./schedule-tab", () => ({ ScheduleTab: () => <p>Schedule panel</p> }));
 vi.mock("./profile-tab", () => ({ ProfileTab: () => <p>Profile panel</p> }));
 vi.mock("./notifications-tab", () => ({ NotificationsTab: () => <p>Notifications panel</p> }));
+vi.mock("./filters-tab", () => ({ FiltersTab: () => <p>Filters panel</p> }));
 vi.mock("./account-tab", () => ({ AccountTab: () => <p>Account panel</p> }));
 
 describe("settingsTab", () => {
@@ -21,7 +22,8 @@ describe("settingsTab", () => {
     ["account", "account"],
     [null, "schedule"],
     ["", "schedule"],
-    ["filters", "schedule"],
+    ["filters", "filters"],
+    ["nope", "schedule"],
   ])("?tab=%s → %s", (param, expected) => {
     expect(settingsTab(param)).toBe(expected);
   });
