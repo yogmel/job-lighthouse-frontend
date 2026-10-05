@@ -37,6 +37,8 @@ const run = (id: string, started_at: string, patch: Partial<Run> = {}): Run => (
   finished_at: new Date(Date.parse(started_at) + 38_000).toISOString(),
   status: "success",
   trigger: "cron",
+  scope: "full",
+  company_id: null,
   jobs_found: 0,
   error: null,
   ...patch,
@@ -54,7 +56,8 @@ const result = (
   status: RunCompanyResult["status"],
   jobs_found: number,
   error: string | null = null,
-): RunCompanyResult => ({ id, run_id: "r3", company_id, status, jobs_found, error });
+  company_name = COMPANIES.find((c) => c.id === company_id)?.name ?? "",
+): RunCompanyResult => ({ id, run_id: "r3", company_id, company_name, status, jobs_found, error });
 
 const LATEST_RESULTS: RunCompanyResult[] = [
   result("x4", "c4", "skipped", 0),
@@ -179,6 +182,41 @@ describe("RunsScreen", () => {
     render(<RunsScreen />);
 
     expect(await screen.findByText("Removed company · 4 jobs")).toBeInTheDocument();
+  });
+
+  it("marks Single-company runs and names the company from the breakdown", async () => {
+    const single = run("r4", "2026-10-02T08:00:00Z", {
+      trigger: "manual",
+      scope: "company",
+      company_id: "c1",
+      jobs_found: 3,
+    });
+    mockApi([single, ...RUNS], {
+      "GET /runs/r4/companies": () => json(200, [{ ...result("s1", "c1", "ok", 3), run_id: "r4" }]),
+    });
+    render(<RunsScreen />);
+
+    const row = (await screen.findByRole("button", { name: "Today 08:00" })).closest("tr")!;
+    expect(within(row).getByText("Single company")).toBeInTheDocument();
+    expect(await within(row).findByText("Northwind")).toBeInTheDocument();
+    const full = screen.getByRole("button", { name: "Today 07:04" }).closest("tr")!;
+    expect(within(full).queryByText("Single company")).not.toBeInTheDocument();
+  });
+
+  it("still names a Single-company run whose company was deleted", async () => {
+    const single = run("r4", "2026-10-02T08:00:00Z", {
+      trigger: "manual",
+      scope: "company",
+      company_id: "gone",
+    });
+    mockApi([single, ...RUNS], {
+      "GET /runs/r4/companies": () =>
+        json(200, [{ ...result("s1", "gone", "ok", 2, null, "Closedco"), run_id: "r4" }]),
+    });
+    render(<RunsScreen />);
+
+    const row = (await screen.findByRole("button", { name: "Today 08:00" })).closest("tr")!;
+    expect(await within(row).findByText("Closedco")).toBeInTheDocument();
   });
 
   it("shows the breakdown error without hiding the history", async () => {

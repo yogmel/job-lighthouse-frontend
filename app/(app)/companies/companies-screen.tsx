@@ -8,7 +8,9 @@ import {
   updateCompany,
   type Company,
 } from "@/lib/api/companies";
+import { ApiError } from "@/lib/api/client";
 import { toFormErrors } from "@/lib/api/errors";
+import { useRuns } from "../run-context";
 import { CompaniesTable, needsCustomHandling } from "./companies-table";
 import { CompanyDialog } from "./company-dialog";
 import type { CompanyDefaults } from "./company-fields";
@@ -48,6 +50,8 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
   const [removing, setRemoving] = useState<Company>();
   const [banner, setBanner] = useState<string | undefined>(justAdded && addedBanner(justAdded));
   const [actionError, setActionError] = useState<string>();
+  const [runningId, setRunningId] = useState<string>();
+  const { trigger } = useRuns();
 
   useEffect(() => {
     let cancelled = false;
@@ -109,6 +113,31 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
     }
   }
 
+  /** Starts a Single-company run. 409 (paused / run in progress) and 404 show the backend's message. */
+  async function runNow(company: Company) {
+    if (runningId) return;
+    setRunningId(company.id);
+    setBanner(undefined);
+    setActionError(undefined);
+    try {
+      const run = await trigger(company.id);
+      setBanner(
+        run.status === "running" ? `Run started for ${company.name}.` : `Run finished for ${company.name}.`,
+      );
+    } catch (err) {
+      setActionError(errorMessage(err));
+      // 404: the company is gone, so the list is stale.
+      if (err instanceof ApiError && err.status === 404) {
+        listCompanies().then(
+          (companies) => setState({ status: "ready", companies }),
+          () => {},
+        );
+      }
+    } finally {
+      setRunningId(undefined);
+    }
+  }
+
   function onRemoved(company: Company) {
     setState((prev) =>
       prev.status === "ready"
@@ -126,9 +155,12 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
     if (needsCustomHandling(company)) return [edit, remove];
     return [
       edit,
-      company.active
-        ? { label: "Pause watching", onSelect: () => setActive(company, false) }
-        : { label: "Resume watching", onSelect: () => setActive(company, true) },
+      ...(company.active
+        ? [
+            { label: "Run now", onSelect: () => runNow(company) },
+            { label: "Pause watching", onSelect: () => setActive(company, false) },
+          ]
+        : [{ label: "Resume watching", onSelect: () => setActive(company, true) }]),
       remove,
     ];
   }

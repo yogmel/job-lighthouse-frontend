@@ -6,8 +6,8 @@ import { triggerRun, type Run } from "@/lib/api/runs";
 type RunContextValue = {
   /** The newest run started from any Run now button on this visit. */
   triggered: Run | undefined;
-  /** `POST /runs`; rejects like `triggerRun` (409 = already running). */
-  trigger: () => Promise<Run>;
+  /** `POST /runs`, for one Company when `companyId` is given; rejects like `triggerRun`. */
+  trigger: (companyId?: string) => Promise<Run>;
 };
 
 // Without a provider (screens rendered alone, e.g. in tests) it still triggers.
@@ -17,8 +17,8 @@ const RunContext = createContext<RunContextValue>({ triggered: undefined, trigge
 export function RunProvider({ children }: { children: React.ReactNode }) {
   const [triggered, setTriggered] = useState<Run>();
 
-  const trigger = useCallback(async () => {
-    const run = await triggerRun();
+  const trigger = useCallback(async (companyId?: string) => {
+    const run = await triggerRun(companyId);
     setTriggered(run);
     return run;
   }, []);

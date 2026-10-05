@@ -65,6 +65,8 @@ const RUN: Run = {
   finished_at: null,
   status: "running",
   trigger: "manual",
+  scope: "full",
+  company_id: null,
   jobs_found: 0,
   error: null,
 };

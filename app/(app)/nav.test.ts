@@ -29,6 +29,8 @@ describe("runStatusText", () => {
     finished_at: status === "running" ? null : started_at,
     status,
     trigger: "cron",
+    scope: "full",
+    company_id: null,
     jobs_found: 0,
     error: null,
   });
