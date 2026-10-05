@@ -10,7 +10,7 @@ import {
   type CompanyDefaults,
   type CompanyField,
 } from "./company-fields";
-import { Modal } from "./modal";
+import { Modal } from "../modal";
 
 type Props = {
   title: string;

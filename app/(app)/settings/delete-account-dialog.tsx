@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Modal } from "@/app/(app)/companies/modal";
+import { Modal } from "@/app/(app)/modal";
 import { deleteAccount } from "@/lib/api/account";
 import { toFormErrors } from "@/lib/api/errors";
 
@@ -10,6 +10,10 @@ type Props = {
   onDeleted: () => void;
   onClose: () => void;
 };
+
+// React's autoFocus calls focus() before the dialog is open, so it is lost. showModal()
+// honors the autofocus attribute instead.
+const focusOnOpen = (el: HTMLInputElement | null) => el?.setAttribute("autofocus", "");
 
 /**
  * Explicit confirmation: nothing is sent until the user types their email
@@ -47,6 +51,7 @@ export function DeleteAccountDialog({ email, onDeleted, onClose }: Props) {
           </label>
           <input
             id="delete-confirm"
+            ref={focusOnOpen}
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             autoComplete="off"
