@@ -357,7 +357,7 @@ location?: string;
 | `PUT`    | `/companies/{id}`             | modify company                                           |
 | `DELETE` | `/companies/{id}`             | delete company and its jobs (204 / 404 / 409 while a run is in progress) |
 | `POST`   | `/companies/{id}/test`        | re-test a company's source; report reachability/count    |
-| `GET`    | `/jobs`                       | one page of jobs (`limit`, `cursor`); `X-Next-Cursor` while more remain |
+| `GET`    | `/jobs`                       | one page of jobs (`limit`, `cursor`); `X-Next-Cursor` while more remain; first page also sends `X-Total-Count` |
 | `GET`    | `/config`                     | fetch configuration                                      |
 | `PUT`    | `/config`                     | modify configuration                                     |
 | `POST`   | `/runs`                       | trigger a run now (manual)                               |

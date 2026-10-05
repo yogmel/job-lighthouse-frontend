@@ -94,7 +94,10 @@ function mockApi(
 }
 
 /** Serves `GET /jobs` pages by cursor ("" = first page); `next` becomes `X-Next-Cursor`. */
-function mockPages(pages: Record<string, { jobs: Job[]; next?: string }>, companies: Company[]) {
+function mockPages(
+  pages: Record<string, { jobs: Job[]; next?: string; total?: number }>,
+  companies: Company[],
+) {
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = new URL(String(input));
     if (url.pathname === "/companies") return json(200, companies);
@@ -102,9 +105,23 @@ function mockPages(pages: Record<string, { jobs: Job[]; next?: string }>, compan
     if (url.pathname !== "/jobs" || !page) throw new Error(`Unexpected request: ${input}`);
     return new Response(JSON.stringify(page.jobs), {
       status: 200,
-      headers: { "Content-Type": "application/json", ...(page.next && { "X-Next-Cursor": page.next }) },
+      headers: {
+        "Content-Type": "application/json",
+        ...(page.next && { "X-Next-Cursor": page.next }),
+        ...(page.total !== undefined && { "X-Total-Count": String(page.total) }),
+      },
     });
   });
+}
+
+/** Stands in for the header's Run now. */
+function TriggerButton() {
+  const { trigger } = useRuns();
+  return (
+    <button type="button" onClick={() => trigger().catch(() => {})}>
+      Trigger
+    </button>
+  );
 }
 
 function jobRequests(spy: ReturnType<typeof mockApi>): string[] {
@@ -344,20 +361,93 @@ describe("JobsScreen · paging", () => {
   });
 });
 
-describe("JobsScreen · runs", () => {
+describe("JobsScreen · total", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  /** Stands in for the header's Run now. */
-  function TriggerButton() {
-    const { trigger } = useRuns();
-    return (
-      <button type="button" onClick={() => trigger().catch(() => {})}>
-        Trigger
-      </button>
+  it("shows how many jobs are loaded out of the first page's total", async () => {
+    mockPages({ "": { jobs: [FRONTEND], next: "c1", total: 312 } }, [HALDEN]);
+    render(<JobsScreen />);
+
+    expect(await screen.findByText("1 of 312 jobs")).toBeInTheDocument();
+  });
+
+  it("keeps the total from the first page across Load more", async () => {
+    mockPages(
+      { "": { jobs: [FRONTEND], next: "c1", total: 312 }, c1: { jobs: [PLATFORM] } },
+      [HALDEN, NORTHSTAR],
     );
-  }
+    const user = userEvent.setup();
+    render(<JobsScreen />);
+
+    await user.click(await screen.findByRole("button", { name: "Load more" }));
+
+    expect(await screen.findByText("2 of 312 jobs")).toBeInTheDocument();
+  });
+
+  it("refreshes the total when a finished run restarts from the first page", async () => {
+    let ran = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/companies") return json(200, [HALDEN]);
+      if (url.pathname === "/runs") {
+        ran = true;
+        return json(200, { ...RUN, status: "success", jobs_found: 1 });
+      }
+      return new Response(JSON.stringify([FRONTEND]), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "X-Total-Count": ran ? "313" : "312" },
+      });
+    });
+    const user = userEvent.setup();
+    render(
+      <RunProvider>
+        <TriggerButton />
+        <JobsScreen />
+      </RunProvider>,
+    );
+    await screen.findByText("1 of 312 jobs");
+
+    await user.click(screen.getByRole("button", { name: "Trigger" }));
+
+    expect(await screen.findByText("1 of 313 jobs")).toBeInTheDocument();
+  });
+
+  it("keeps the total when filters change (filtering is client-side)", async () => {
+    mockPages({ "": { jobs: [FRONTEND, PLATFORM], total: 2 } }, [HALDEN, NORTHSTAR]);
+    const user = userEvent.setup();
+    render(<JobsScreen />);
+    await screen.findByText("2 of 2 jobs");
+
+    await user.selectOptions(screen.getByLabelText("Company"), "c1");
+
+    expect(screen.getByText("2 of 2 jobs")).toBeInTheDocument();
+  });
+
+  it.each([["missing", undefined], ["not a number", "lots"]])(
+    "shows no total when the header is %s",
+    async (_, header) => {
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+        if (new URL(String(input)).pathname === "/companies") return json(200, [HALDEN]);
+        return new Response(JSON.stringify([FRONTEND]), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...(header && { "X-Total-Count": header }) },
+        });
+      });
+      render(<JobsScreen />);
+
+      expect(await screen.findByText("Frontend Engineer")).toBeInTheDocument();
+      expect(screen.getByText("1 open")).toBeInTheDocument();
+      expect(screen.queryByText(/ of /)).not.toBeInTheDocument();
+    },
+  );
+});
+
+describe("JobsScreen · runs", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it("has no Run now of its own (the header has it)", async () => {
     mockApi([FRONTEND], [HALDEN]);
