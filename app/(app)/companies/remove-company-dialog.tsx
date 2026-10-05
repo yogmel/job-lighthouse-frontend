@@ -2,17 +2,20 @@
 
 import { useState } from "react";
 import { deleteCompany, type Company } from "@/lib/api/companies";
+import { ApiError } from "@/lib/api/client";
 import { toFormErrors } from "@/lib/api/errors";
 import { Modal } from "./modal";
 
 type Props = {
   company: Company;
   onRemoved: (company: Company) => void;
+  /** The company was already gone (404): the list needs a refresh. */
+  onGone: (company: Company) => void;
   onClose: () => void;
 };
 
 /** Asks before removing; nothing is sent until "Remove company" is clicked. */
-export function RemoveCompanyDialog({ company, onRemoved, onClose }: Props) {
+export function RemoveCompanyDialog({ company, onRemoved, onGone, onClose }: Props) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -23,6 +26,11 @@ export function RemoveCompanyDialog({ company, onRemoved, onClose }: Props) {
       await deleteCompany(company.id);
       onRemoved(company);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        onGone(company);
+        return;
+      }
+      // 409 ("A run is in progress") lands here: the dialog stays open so the user can retry.
       setError(toFormErrors(err, []).formError);
       setPending(false);
     }
@@ -32,8 +40,8 @@ export function RemoveCompanyDialog({ company, onRemoved, onClose }: Props) {
     <Modal title={`Remove ${company.name}?`} onClose={onClose}>
       <div className="flex flex-col gap-3 px-6 py-6 text-sm">
         <p>
-          {company.name} will no longer be watched or listed here. To stop checking it but keep
-          it, pause it instead.
+          {company.name} and all of its jobs will be deleted. Past runs are kept. To stop checking it
+          but keep its jobs, pause it instead.
         </p>
         {error && (
           <p role="alert" className="text-danger">

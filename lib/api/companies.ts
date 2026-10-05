@@ -62,8 +62,8 @@ export function updateCompany(id: string, update: CompanyUpdate): Promise<Compan
 }
 
 /**
- * Not in SYSTEM_DESIGN.md's API table yet; assumed to be
- * `DELETE /companies/{id}` answering 204.
+ * `DELETE /companies/{id}`: removes the company and its jobs (run history is
+ * kept). 204; 404 if it is gone; 409 while a run is in progress.
  */
 export async function deleteCompany(id: string): Promise<void> {
   await apiFetch<null>(`/companies/${encodeURIComponent(id)}`, { method: "DELETE" });

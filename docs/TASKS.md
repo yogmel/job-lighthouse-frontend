@@ -1162,7 +1162,7 @@ Issue: job-lighthouse-frontend#43.
       (server keyset cursor; client drops repeated ids; a finished Run restarts
       from the first page)
 
-### FE-020 · Delete company action and paused badge on jobs
+### ~~FE-020 · Delete company action and paused badge on jobs~~
 
 **Target:** frontend **Version:** v1.0
 
@@ -1172,8 +1172,16 @@ job-lighthouse-frontend#44.
 
 **Acceptance criteria:**
 
-- Delete with confirm dialog; 204 / 404 / 409 handled
-- Jobs with `company_active: false` show a paused badge
+- [x] "Remove company" in the row menu calls `DELETE /companies/{id}` after a
+      confirm dialog saying its Jobs will be deleted
+- [x] **204**: the Company leaves the list; the job list loads fresh on its next
+      visit, so its Jobs are gone
+- [x] **409** "A run is in progress": the message is shown, the dialog stays
+      open and the user can retry
+- [x] **404**: the dialog closes and the list is refreshed
+- [x] Jobs with `company_active: false` show a "Paused" badge
+- [x] Pause/resume copy no longer says Jobs are closed (no UI copy did; the
+      stale comments and SYSTEM_DESIGN.md text were fixed)
 
 ---
 

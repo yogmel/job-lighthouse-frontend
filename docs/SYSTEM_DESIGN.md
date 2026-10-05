@@ -227,16 +227,12 @@ without a join; it may drift after a rename and is display-only.
 
 - The runner flips it to `false` when a job it previously stored no longer appears
   in the company's current openings.
-- Deactivating a company (`Companies.active = false`) cascades: all of that
-  company's jobs are set to `active = false`.
-- Reactivating a company does **not** restore its jobs. They stay `false` until
-  the next run re-confirms them as open.
-- Jobs are never deleted; inactive rows stay as history and are hidden from the
+- Pausing or resuming a company (`Companies.active`) changes no job. `GET /jobs`
+  items carry `company_active`; the UI marks jobs of paused companies with a
+  "Paused" badge, and they are left out of the digest.
+- Deleting a company (`DELETE /companies/{id}`) deletes its jobs; run history is
+  kept. Inactive rows are otherwise kept as history and hidden from the
   dashboard's default view.
-
-> Known conflation, accepted for now: the company cascade sets `active = false`
-> on postings that may still be live. Fine while the dashboard only filters on
-> this flag; revisit if "posting closed" ever needs to be a distinct signal.
 
 **No content diffing.** If a company edits a live job's title or description
 in place without changing its URL, it is never re-detected or re-scored —
@@ -359,6 +355,7 @@ location?: string;
 | `POST`   | `/companies`                  | add new company                                          |
 | `POST`   | `/companies/detect`           | given a careers URL, run ATS detection (+ fallback agent), return a draft Source and a scored sample |
 | `PUT`    | `/companies/{id}`             | modify company                                           |
+| `DELETE` | `/companies/{id}`             | delete company and its jobs (204 / 404 / 409 while a run is in progress) |
 | `POST`   | `/companies/{id}/test`        | re-test a company's source; report reachability/count    |
 | `GET`    | `/jobs`                       | one page of jobs (`limit`, `cursor`); `X-Next-Cursor` while more remain |
 | `GET`    | `/config`                     | fetch configuration                                      |

@@ -379,12 +379,13 @@ describe("CompaniesScreen · pause and remove", () => {
 
     const user = await chooseAction("Halden", "Remove company");
     const dialog = screen.getByRole("dialog", { name: "Remove Halden?" });
+    expect(dialog).toHaveTextContent("all of its jobs will be deleted");
     expect(spy).toHaveBeenCalledTimes(1); // only the list load
 
     await user.click(within(dialog).getByRole("button", { name: "Remove company" }));
 
     await vi.waitFor(() => expect(screen.queryByText("Halden")).not.toBeInTheDocument());
-    expect(screen.getByRole("status")).toHaveTextContent("Halden removed.");
+    expect(screen.getByRole("status")).toHaveTextContent("Halden and its jobs removed.");
     expect(screen.getByText("Northstar")).toBeInTheDocument();
     expect(spy.mock.calls[1][0]).toBe("http://api.test/companies/c1");
     expect(spy.mock.calls[1][1]?.method).toBe("DELETE");
@@ -402,16 +403,49 @@ describe("CompaniesScreen · pause and remove", () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps the row and shows the error when removal fails", async () => {
-    mockApi([HALDEN], { "DELETE /companies/c1": () => json(404, { detail: "Company not found" }) });
+  it("keeps the dialog open on 409 so the removal can be retried", async () => {
+    let attempts = 0;
+    mockApi([HALDEN], {
+      "DELETE /companies/c1": () =>
+        ++attempts === 1
+          ? json(409, { detail: "A run is in progress" })
+          : new Response(null, { status: 204 }),
+    });
     render(<CompaniesScreen />);
 
     const user = await chooseAction("Halden", "Remove company");
     const dialog = screen.getByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: "Remove company" }));
 
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Company not found");
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("A run is in progress");
     expect(screen.getByText("Halden")).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "Remove company" }));
+    await vi.waitFor(() => expect(screen.queryByText("Halden")).not.toBeInTheDocument());
+    expect(attempts).toBe(2);
+  });
+
+  it("refreshes the list when the company is already gone (404)", async () => {
+    let list = [HALDEN, NORTHSTAR];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const key = `${init?.method ?? "GET"} ${String(input).replace("http://api.test", "")}`;
+      if (key === "GET /companies") return json(200, list);
+      if (key === "DELETE /companies/c1") {
+        list = [NORTHSTAR];
+        return json(404, { detail: "Company not found" });
+      }
+      throw new Error(`Unexpected request: ${key}`);
+    });
+    render(<CompaniesScreen />);
+
+    const user = await chooseAction("Halden", "Remove company");
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Remove company" }),
+    );
+
+    await vi.waitFor(() => expect(screen.queryByText("Halden")).not.toBeInTheDocument());
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("Northstar")).toBeInTheDocument();
   });
 
   it("shows the added banner with a link to the jobs board", async () => {

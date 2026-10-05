@@ -73,6 +73,14 @@ export function JobsList({ jobs }: Props) {
                       </span>
                     </div>
                     <div className="flex items-center gap-3 text-muted">
+                      {!job.company_active && (
+                        <span
+                          title="This company is paused: it is not fetched and its jobs stay out of the digest."
+                          className="rounded-sm bg-surface px-2 py-0.5 text-xs font-medium"
+                        >
+                          Paused
+                        </span>
+                      )}
                       {!job.active && (
                         <span className="rounded-sm bg-surface px-2 py-0.5 text-xs font-medium">
                           Closed
