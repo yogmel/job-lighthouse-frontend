@@ -58,6 +58,8 @@ export function JobsScreen() {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState<string>();
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string>();
   const { triggered } = useRuns();
 
   useEffect(() => {
@@ -98,6 +100,22 @@ export function JobsScreen() {
     };
   }, [finishedRun]);
 
+  /** Reloads from the first page with the same filters; the old list stays up meanwhile. */
+  async function refresh() {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshError(undefined);
+    try {
+      const [page, companies] = await Promise.all([listJobs(), listCompanies()]);
+      setState({ status: "ready", jobs: page.jobs, nextCursor: page.nextCursor, total: page.total, companies });
+      setMoreError(undefined);
+    } catch (err) {
+      setRefreshError(errorMessage(err));
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   const nextCursor = state.status === "ready" ? state.nextCursor : null;
 
   async function loadMore() {
@@ -125,6 +143,7 @@ export function JobsScreen() {
 
   return (
     <>
+      <div className="flex items-end justify-between gap-4">
       <div className="flex flex-col gap-1">
         <h1 className="font-heading text-3xl">Jobs</h1>
         {state.status === "ready" && rows.length > 0 && (
@@ -141,6 +160,22 @@ export function JobsScreen() {
           </p>
         )}
       </div>
+        {state.status === "ready" && (
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={refreshing}
+            className="rounded-md border border-divider px-4 py-2 text-sm font-semibold hover:border-accent disabled:opacity-60"
+          >
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
+        )}
+      </div>
+      {refreshError && (
+        <p role="alert" className="text-sm text-danger">
+          {refreshError}
+        </p>
+      )}
 
       {state.status === "loading" && <p className="text-sm text-muted">Loading jobs…</p>}
 

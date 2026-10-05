@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   createCompany,
   listCompanies,
@@ -10,6 +10,7 @@ import {
 } from "@/lib/api/companies";
 import { ApiError } from "@/lib/api/client";
 import { toFormErrors } from "@/lib/api/errors";
+import { Banner, BANNER_DISMISS_MS } from "../banner";
 import { useRuns } from "../run-context";
 import { CompaniesTable, needsCustomHandling } from "./companies-table";
 import { CompanyDialog } from "./company-dialog";
@@ -52,6 +53,7 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
   const [actionError, setActionError] = useState<string>();
   const [runningId, setRunningId] = useState<string>();
   const { trigger } = useRuns();
+  const dismissBanner = useCallback(() => setBanner(undefined), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -168,17 +170,14 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
   return (
     <>
       {banner && (
-        <p
-          role="status"
-          className="rounded-md border border-accent/40 bg-surface px-4 py-3 text-sm font-semibold"
-        >
+        <Banner onDismiss={dismissBanner} autoDismissMs={BANNER_DISMISS_MS}>
           {banner}
           {justAdded && banner === addedBanner(justAdded) && (
             <Link href="/jobs" className="ml-3 underline">
               View jobs
             </Link>
           )}
-        </p>
+        </Banner>
       )}
 
       {actionError && (

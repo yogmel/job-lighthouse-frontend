@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { listCompanies, type Company } from "@/lib/api/companies";
 import { getConfig } from "@/lib/api/config";
 import { toFormErrors } from "@/lib/api/errors";
 import { listRunCompanies, listRuns, type Run, type RunCompanyResult } from "@/lib/api/runs";
 import { formatUtc, nextCronRun, untilLabel } from "@/lib/cron";
+import { Banner, BANNER_DISMISS_MS } from "../banner";
 import { useRuns, withRun } from "../run-context";
 import { isSameUtcDay, plural, startedLabel } from "./format";
 import { needsAttention, RunBreakdown } from "./run-breakdown";
@@ -68,6 +69,7 @@ export function RunsScreen() {
   const [running, setRunning] = useState(false);
   const [banner, setBanner] = useState<string>();
   const [actionError, setActionError] = useState<string>();
+  const dismissBanner = useCallback(() => setBanner(undefined), []);
   // Captured once so the estimates don't change between renders.
   const [now] = useState(() => new Date());
   // Runs started from the header show up here too.
@@ -184,12 +186,9 @@ export function RunsScreen() {
   return (
     <>
       {banner && (
-        <p
-          role="status"
-          className="rounded-md border border-accent/40 bg-surface px-4 py-3 text-sm font-semibold"
-        >
+        <Banner onDismiss={dismissBanner} autoDismissMs={BANNER_DISMISS_MS}>
           {banner}
-        </p>
+        </Banner>
       )}
       {actionError && (
         <p role="alert" className="text-sm text-danger">
@@ -254,7 +253,8 @@ export function RunsScreen() {
                       <tr
                         key={run.id}
                         aria-selected={isSelected}
-                        className={`border-t border-divider ${isSelected ? "bg-surface/60" : ""}`}
+                        onClick={() => setSelectedId(run.id)}
+                        className={`cursor-pointer border-t border-divider hover:bg-surface/40 ${isSelected ? "bg-surface/60" : ""}`}
                       >
                         <td className="px-4 py-3">
                           <button

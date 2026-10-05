@@ -17,6 +17,11 @@ export function needsCustomHandling(company: Company): boolean {
   return company.source.kind === "custom" && !company.active;
 }
 
+/** Paused rows fade their cells, not the row, so the "⋯" menu popover stays fully opaque. */
+function dim(company: Company): string {
+  return company.active ? "" : "opacity-60";
+}
+
 function Status({ company }: { company: Company }) {
   if (needsCustomHandling(company)) {
     return (
@@ -66,10 +71,19 @@ export function CompaniesTable({ companies, menuItems }: Props) {
           {companies.map((company) => (
             <tr
               key={company.id}
-              className={`border-t border-divider ${company.active ? "" : "opacity-60"}`}
+              className="border-t border-divider"
             >
-              <td className="px-4 py-3 font-semibold">{company.name}</td>
-              <td className="px-4 py-3">
+              <td className={`px-4 py-3 font-semibold ${dim(company)}`}>
+                <a
+                  href={company.website_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline-offset-2 hover:underline"
+                >
+                  {company.name}
+                </a>
+              </td>
+              <td className={`px-4 py-3 ${dim(company)}`}>
                 <span
                   className={`rounded-sm px-2 py-0.5 text-xs font-medium ${
                     company.tier === 1 ? "bg-accent text-white" : "bg-surface"
@@ -78,11 +92,11 @@ export function CompaniesTable({ companies, menuItems }: Props) {
                   Tier {company.tier}
                 </span>
               </td>
-              <td className="px-4 py-3 text-muted">{sourceLabel(company.source)}</td>
-              <td className="hidden px-4 py-3 text-muted sm:table-cell">
+              <td className={`px-4 py-3 text-muted ${dim(company)}`}>{sourceLabel(company.source)}</td>
+              <td className={`hidden px-4 py-3 text-muted sm:table-cell ${dim(company)}`}>
                 <time dateTime={company.added_at}>{dateFormat.format(new Date(company.added_at))}</time>
               </td>
-              <td className="px-4 py-3">
+              <td className={`px-4 py-3 ${dim(company)}`}>
                 <Status company={company} />
               </td>
               <td className="px-4 py-3 text-right">

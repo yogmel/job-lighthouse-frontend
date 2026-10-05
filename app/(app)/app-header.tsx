@@ -2,20 +2,27 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { listCompanies } from "@/lib/api/companies";
 import { getConfig } from "@/lib/api/config";
 import { toFormErrors } from "@/lib/api/errors";
 import { listJobs } from "@/lib/api/jobs";
 import { listRuns, type Run } from "@/lib/api/runs";
+import { Banner, BANNER_DISMISS_MS } from "./banner";
 import { activeTab, runStatusText, TABS } from "./nav";
 import { useRuns, withRun } from "./run-context";
 
 type Counts = { jobs?: number; companies?: number };
 
 /** Feedback for the header's Run now, tied to the page it was clicked on. */
-type Feedback = { pathname: string; kind: "status" | "alert"; text: string };
+type Feedback = {
+  pathname: string;
+  kind: "status" | "alert";
+  text: string;
+  /** "Run started": stays while the run is going, then clears. */
+  whileRunning?: boolean;
+};
 
 const RUNNING_POLL_MS = 30_000;
 
@@ -23,12 +30,12 @@ function errorMessage(err: unknown): string {
   return toFormErrors(err, []).formError ?? "Something went wrong. Please try again.";
 }
 
-function runFeedback(run: Run): Pick<Feedback, "kind" | "text"> {
+function runFeedback(run: Run): Pick<Feedback, "kind" | "text" | "whileRunning"> {
   if (run.status === "failed") {
     return { kind: "alert", text: run.error ? `Run failed: ${run.error}` : "Run failed." };
   }
   if (run.status === "running") {
-    return { kind: "status", text: "Run started. New jobs show up when it finishes." };
+    return { kind: "status", text: "Run started. New jobs show up when it finishes.", whileRunning: true };
   }
   const found = `${run.jobs_found} new ${run.jobs_found === 1 ? "job" : "jobs"}`;
   return { kind: "status", text: `Run finished. ${found}.` };
@@ -109,18 +116,20 @@ export function AppHeader() {
     };
   }, [pathname]);
 
-  // A finished run can bring new jobs.
+  // A finished run can bring new jobs. The first page is the whole job list's
+  // cost, so this runs on load and after a run, not on every navigation.
   const finishedRun = triggered?.status === "success" ? triggered.id : undefined;
   useEffect(() => {
     let cancelled = false;
     listJobs().then(
-      (page) => !cancelled && setCounts((prev) => ({ ...prev, jobs: page.jobs.length })),
+      (page) =>
+        !cancelled && setCounts((prev) => ({ ...prev, jobs: page.total ?? page.jobs.length })),
       () => {},
     );
     return () => {
       cancelled = true;
     };
-  }, [pathname, finishedRun]);
+  }, [finishedRun]);
 
   useEffect(() => {
     getConfig().then(
@@ -163,7 +172,10 @@ export function AppHeader() {
     }
   }
 
-  const shown = feedback?.pathname === pathname ? feedback : undefined;
+  // "Run started" is stale once the run ends.
+  const stale = feedback?.whileRunning && allRuns && !isRunning;
+  const shown = feedback?.pathname === pathname && !stale ? feedback : undefined;
+  const dismissFeedback = useCallback(() => setFeedback(undefined), []);
 
   return (
     <header className="border-b border-divider">
@@ -202,16 +214,21 @@ export function AppHeader() {
       </div>
       {shown && (
         <div className="mx-auto w-full max-w-5xl px-4 pb-3 sm:px-6">
-          <p
-            role={shown.kind}
-            className={
-              shown.kind === "alert"
-                ? "text-sm text-danger"
-                : "rounded-md border border-accent/40 bg-surface px-4 py-3 text-sm font-semibold"
-            }
-          >
-            {shown.text}
-          </p>
+          {shown.kind === "alert" ? (
+            <div role="alert" className="flex items-start justify-between gap-3 text-sm text-danger">
+              <p>{shown.text}</p>
+              <button type="button" onClick={dismissFeedback} aria-label="Dismiss" className="px-2">
+                ×
+              </button>
+            </div>
+          ) : (
+            <Banner
+              onDismiss={dismissFeedback}
+              autoDismissMs={shown.whileRunning ? undefined : BANNER_DISMISS_MS}
+            >
+              {shown.text}
+            </Banner>
+          )}
         </div>
       )}
     </header>

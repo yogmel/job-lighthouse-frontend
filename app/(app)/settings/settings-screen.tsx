@@ -2,11 +2,13 @@
 
 import { useSearchParams } from "next/navigation";
 import { AccountTab } from "./account-tab";
+import { FiltersTab } from "./filters-tab";
 import { NotificationsTab } from "./notifications-tab";
 import { ProfileTab } from "./profile-tab";
 import { ScheduleTab } from "./schedule-tab";
 
 const TABS = [
+  { id: "filters", label: "Filters" },
   { id: "schedule", label: "Schedule" },
   { id: "profile", label: "Profile" },
   { id: "notifications", label: "Notifications" },
@@ -22,7 +24,7 @@ export function settingsTab(param: string | null): TabId {
 
 /**
  * Settings shell. The open tab lives in `?tab=` so the header's Profile link
- * can deep-link to it. Filters arrives with its own ticket.
+ * can deep-link to it. Schedule stays the default tab.
  */
 export function SettingsScreen() {
   const tab = settingsTab(useSearchParams().get("tab"));
@@ -56,6 +58,7 @@ export function SettingsScreen() {
             ))}
           </ul>
         </nav>
+        {tab === "filters" && <FiltersTab />}
         {tab === "schedule" && <ScheduleTab />}
         {tab === "profile" && <ProfileTab />}
         {tab === "notifications" && <NotificationsTab />}

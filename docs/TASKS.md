@@ -1245,3 +1245,39 @@ Company name. Blocked by BE-058. Issue: job-lighthouse-frontend#46.
 - [x] Run history marks Single-company runs and names the Company from the
       breakdown row (`RunCompanyResult.company_name`)
 - [x] Single-company runs shown for Deleted companies, using the stored name
+
+### FE-023 · Settings → Filters tab
+
+**Target:** frontend **Version:** v1.1
+
+Edit `keywords_include`, `keywords_exclude` and `location` in Settings,
+first tab, per the prototype's Settings · Filters step. Schedule stays the
+default when `?tab=` is missing. Issue: job-lighthouse-frontend#54.
+
+**Acceptance criteria:**
+
+- [x] Keywords to include and to exclude edited as comma-separated lists
+- [x] Hint that excludes match whole words only
+- [x] Location field
+- [x] Saving calls `PUT /config` with every editable field and shows the
+      "applies to the next run" note
+- [x] Field validation errors shown on the field
+
+### FE-024 · UI polish and faster navigation
+
+**Target:** frontend **Version:** v1.1
+
+Small fixes from a click-through review, plus a faster feel when switching
+screens. Issue: job-lighthouse-frontend#55.
+
+**Acceptance criteria:**
+
+- [x] Run banners can be closed; "Run started" clears when the run ends,
+      "Run finished" after a few seconds, failures stay until closed
+- [x] A paused company's row menu popover is fully opaque
+- [x] The company name links to its website in a new tab
+- [x] Clicking anywhere on a Runs history row selects that run
+- [x] Jobs has a Refresh button that reloads from the first page
+- [x] Screens show a loading skeleton at once on navigation
+- [x] The header no longer refetches the job list on every navigation
+

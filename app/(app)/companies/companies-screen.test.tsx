@@ -26,7 +26,12 @@ const NORTHSTAR: Company = {
   source: {
     kind: "scraper",
     strategy: "static",
-    selectors: { careers_url: "https://northstar.example/jobs", job: ".job", title: "h3", link: "a" },
+    selectors: {
+      careers_url: "https://northstar.example/jobs",
+      job: ".job",
+      title: "h3",
+      link: "a",
+    },
   },
 };
 
@@ -59,19 +64,23 @@ function json(status: number, body: unknown): Response {
 
 /** Answers `GET /companies` with `list`, and other calls from `routes` by "METHOD /path". */
 function mockApi(list: Company[], routes: Record<string, () => Response> = {}) {
-  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
-    const path = String(input).replace("http://api.test", "");
-    const key = `${init?.method ?? "GET"} ${path}`;
-    if (key === "GET /companies") return json(200, list);
-    const route = routes[key];
-    if (!route) throw new Error(`Unexpected request: ${key}`);
-    return route();
-  });
+  return vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async (input, init) => {
+      const path = String(input).replace("http://api.test", "");
+      const key = `${init?.method ?? "GET"} ${path}`;
+      if (key === "GET /companies") return json(200, list);
+      const route = routes[key];
+      if (!route) throw new Error(`Unexpected request: ${key}`);
+      return route();
+    });
 }
 
 function sentBody(spy: ReturnType<typeof mockApi>, key: string): unknown {
   const call = spy.mock.calls.find(
-    ([input, init]) => `${init?.method ?? "GET"} ${String(input).replace("http://api.test", "")}` === key,
+    ([input, init]) =>
+      `${init?.method ?? "GET"} ${String(input).replace("http://api.test", "")}` ===
+      key,
   );
   return call ? JSON.parse(String(call[1]?.body)) : undefined;
 }
@@ -109,10 +118,14 @@ describe("CompaniesScreen", () => {
   });
 
   it("shows an alert when the list can't be loaded", async () => {
-    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(
+      new TypeError("Failed to fetch"),
+    );
     render(<CompaniesScreen />);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/can't reach the server/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /can't reach the server/i,
+    );
   });
 });
 
@@ -122,19 +135,37 @@ describe("CompaniesScreen · add company", () => {
   });
 
   it("posts a board-backed company and shows the new row", async () => {
-    const created: Company = { ...HALDEN, id: "c9", name: "Acme", tier: 2, source: { kind: "board", board: "greenhouse", board_id: "acme" } };
-    const spy = mockApi([HALDEN], { "POST /companies": () => json(201, created) });
+    const created: Company = {
+      ...HALDEN,
+      id: "c9",
+      name: "Acme",
+      tier: 2,
+      source: { kind: "board", board: "greenhouse", board_id: "acme" },
+    };
+    const spy = mockApi([HALDEN], {
+      "POST /companies": () => json(201, created),
+    });
     const user = userEvent.setup();
     render(<CompaniesScreen />);
 
-    await user.click(await screen.findByRole("button", { name: "+ Add company" }));
+    await user.click(
+      await screen.findByRole("button", { name: "+ Add company" }),
+    );
     const dialog = screen.getByRole("dialog", { name: "Add company" });
     await user.type(within(dialog).getByLabelText("Name"), "Acme");
-    await user.type(within(dialog).getByLabelText("Website"), "https://acme.example");
+    await user.type(
+      within(dialog).getByLabelText("Website"),
+      "https://acme.example",
+    );
     await user.click(within(dialog).getByLabelText("Tier 2"));
-    await user.selectOptions(within(dialog).getByLabelText("Board"), "greenhouse");
+    await user.selectOptions(
+      within(dialog).getByLabelText("Board"),
+      "greenhouse",
+    );
     await user.type(within(dialog).getByLabelText("Board id"), "acme");
-    await user.click(within(dialog).getByRole("button", { name: "Add company" }));
+    await user.click(
+      within(dialog).getByRole("button", { name: "Add company" }),
+    );
 
     const row = (await screen.findByText("Acme")).closest("tr")!;
     expect(within(row).getByText("greenhouse")).toBeInTheDocument();
@@ -153,19 +184,32 @@ describe("CompaniesScreen · add company", () => {
     const user = userEvent.setup();
     render(<CompaniesScreen />);
 
-    await user.click(await screen.findByRole("button", { name: "+ Add company" }));
+    await user.click(
+      await screen.findByRole("button", { name: "+ Add company" }),
+    );
     const dialog = screen.getByRole("dialog");
     await user.type(within(dialog).getByLabelText("Name"), "Northstar");
-    await user.type(within(dialog).getByLabelText("Website"), "https://northstar.example");
+    await user.type(
+      within(dialog).getByLabelText("Website"),
+      "https://northstar.example",
+    );
     await user.click(within(dialog).getByLabelText("Tier 3"));
     await user.click(within(dialog).getByLabelText("Scraper"));
     expect(within(dialog).queryByLabelText("Board id")).not.toBeInTheDocument();
-    await user.selectOptions(within(dialog).getByLabelText("Strategy"), "dynamic");
-    await user.type(within(dialog).getByLabelText("Careers URL"), "https://northstar.example/jobs");
+    await user.selectOptions(
+      within(dialog).getByLabelText("Strategy"),
+      "dynamic",
+    );
+    await user.type(
+      within(dialog).getByLabelText("Careers URL"),
+      "https://northstar.example/jobs",
+    );
     await user.type(within(dialog).getByLabelText("Job card selector"), ".job");
     await user.type(within(dialog).getByLabelText("Title selector"), "h3");
     await user.type(within(dialog).getByLabelText("Link selector"), "a");
-    await user.click(within(dialog).getByRole("button", { name: "Add company" }));
+    await user.click(
+      within(dialog).getByRole("button", { name: "Add company" }),
+    );
 
     expect(await screen.findByText("Northstar")).toBeInTheDocument();
     expect(sentBody(spy, "POST /companies")).toEqual({
@@ -175,7 +219,12 @@ describe("CompaniesScreen · add company", () => {
       source: {
         kind: "scraper",
         strategy: "dynamic",
-        selectors: { careers_url: "https://northstar.example/jobs", job: ".job", title: "h3", link: "a" },
+        selectors: {
+          careers_url: "https://northstar.example/jobs",
+          job: ".job",
+          title: "h3",
+          link: "a",
+        },
       },
     });
   });
@@ -183,20 +232,39 @@ describe("CompaniesScreen · add company", () => {
   it("shows a nested validation error under its field and keeps the input", async () => {
     mockApi([], {
       "POST /companies": () =>
-        json(422, { detail: [{ loc: ["body", "source", "board", "board_id"], msg: "Field required" }] }),
+        json(422, {
+          detail: [
+            {
+              loc: ["body", "source", "board", "board_id"],
+              msg: "Field required",
+            },
+          ],
+        }),
     });
     const user = userEvent.setup();
     render(<CompaniesScreen />);
 
-    await user.click(await screen.findByRole("button", { name: "+ Add company" }));
+    await user.click(
+      await screen.findByRole("button", { name: "+ Add company" }),
+    );
     const dialog = screen.getByRole("dialog");
     await user.type(within(dialog).getByLabelText("Name"), "Acme");
-    await user.type(within(dialog).getByLabelText("Website"), "https://acme.example");
+    await user.type(
+      within(dialog).getByLabelText("Website"),
+      "https://acme.example",
+    );
     await user.type(within(dialog).getByLabelText("Board id"), " ");
-    await user.click(within(dialog).getByRole("button", { name: "Add company" }));
+    await user.click(
+      within(dialog).getByRole("button", { name: "Add company" }),
+    );
 
-    expect(await within(dialog).findByText("Field required")).toBeInTheDocument();
-    expect(within(dialog).getByLabelText("Board id")).toHaveAttribute("aria-invalid", "true");
+    expect(
+      await within(dialog).findByText("Field required"),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Board id")).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
     expect(within(dialog).getByLabelText("Name")).toHaveValue("Acme");
     expect(screen.queryByRole("row", { name: /Acme/ })).not.toBeInTheDocument();
   });
@@ -209,9 +277,14 @@ describe("CompaniesScreen · edit company", () => {
 
   async function openEdit(name: string) {
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: `Actions for ${name}` }));
+    await user.click(
+      await screen.findByRole("button", { name: `Actions for ${name}` }),
+    );
     await user.click(screen.getByRole("menuitem", { name: "Edit company" }));
-    return { user, dialog: screen.getByRole("dialog", { name: `Edit ${name}` }) };
+    return {
+      user,
+      dialog: screen.getByRole("dialog", { name: `Edit ${name}` }),
+    };
   }
 
   it("prefills the dialog from the row", async () => {
@@ -220,7 +293,9 @@ describe("CompaniesScreen · edit company", () => {
 
     const { dialog } = await openEdit("Halden");
     expect(within(dialog).getByLabelText("Name")).toHaveValue("Halden");
-    expect(within(dialog).getByLabelText("Website")).toHaveValue("https://halden.example");
+    expect(within(dialog).getByLabelText("Website")).toHaveValue(
+      "https://halden.example",
+    );
     expect(within(dialog).getByLabelText("Tier 1")).toBeChecked();
     expect(within(dialog).getByLabelText("Board")).toHaveValue("ashby");
     expect(within(dialog).getByLabelText("Board id")).toHaveValue("halden");
@@ -232,8 +307,12 @@ describe("CompaniesScreen · edit company", () => {
 
     const { dialog } = await openEdit("Northstar");
     expect(within(dialog).getByLabelText("Scraper")).toBeChecked();
-    expect(within(dialog).getByLabelText("Careers URL")).toHaveValue("https://northstar.example/jobs");
-    expect(within(dialog).getByLabelText("Job card selector")).toHaveValue(".job");
+    expect(within(dialog).getByLabelText("Careers URL")).toHaveValue(
+      "https://northstar.example/jobs",
+    );
+    expect(within(dialog).getByLabelText("Job card selector")).toHaveValue(
+      ".job",
+    );
   });
 
   it("shows the re-group note only while the tier differs", async () => {
@@ -253,19 +332,25 @@ describe("CompaniesScreen · edit company", () => {
 
   it("puts the edited company and updates its row", async () => {
     const updated: Company = { ...HALDEN, name: "Halden AB", tier: 2 };
-    const spy = mockApi([HALDEN], { "PUT /companies/c1": () => json(200, updated) });
+    const spy = mockApi([HALDEN], {
+      "PUT /companies/c1": () => json(200, updated),
+    });
     render(<CompaniesScreen />);
 
     const { user, dialog } = await openEdit("Halden");
     await user.clear(within(dialog).getByLabelText("Name"));
     await user.type(within(dialog).getByLabelText("Name"), "Halden AB");
     await user.click(within(dialog).getByLabelText("Tier 2"));
-    await user.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    await user.click(
+      within(dialog).getByRole("button", { name: "Save changes" }),
+    );
 
     const row = (await screen.findByText("Halden AB")).closest("tr")!;
     expect(within(row).getByText("Tier 2")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Halden AB updated. Now Tier 2.");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Halden AB updated. Now Tier 2.",
+    );
     expect(sentBody(spy, "PUT /companies/c1")).toEqual({
       name: "Halden AB",
       tier: 2,
@@ -275,13 +360,19 @@ describe("CompaniesScreen · edit company", () => {
   });
 
   it("keeps the dialog open with the error when saving fails", async () => {
-    mockApi([HALDEN], { "PUT /companies/c1": () => json(404, { detail: "Company not found" }) });
+    mockApi([HALDEN], {
+      "PUT /companies/c1": () => json(404, { detail: "Company not found" }),
+    });
     render(<CompaniesScreen />);
 
     const { user, dialog } = await openEdit("Halden");
-    await user.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    await user.click(
+      within(dialog).getByRole("button", { name: "Save changes" }),
+    );
 
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Company not found");
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "Company not found",
+    );
     expect(screen.getByText("Halden")).toBeInTheDocument();
   });
 });
@@ -293,7 +384,9 @@ describe("CompaniesScreen · pause and remove", () => {
 
   async function chooseAction(name: string, action: string) {
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: `Actions for ${name}` }));
+    await user.click(
+      await screen.findByRole("button", { name: `Actions for ${name}` }),
+    );
     await user.click(screen.getByRole("menuitem", { name: action }));
     return user;
   }
@@ -306,11 +399,15 @@ describe("CompaniesScreen · pause and remove", () => {
 
     await chooseAction("Halden", "Pause watching");
 
-    expect(await screen.findByRole("status")).toHaveTextContent("Halden paused.");
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Halden paused.",
+    );
     const row = screen.getByText("Halden").closest("tr")!;
     expect(within(row).getByText("Paused")).toBeInTheDocument();
     expect(sentBody(spy, "PUT /companies/c1")).toEqual({ active: false });
-    expect(spy.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+    expect(spy.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(
+      false,
+    );
   });
 
   it("resumes a paused company", async () => {
@@ -321,8 +418,12 @@ describe("CompaniesScreen · pause and remove", () => {
 
     await chooseAction("Northstar", "Resume watching");
 
-    expect(await screen.findByRole("status")).toHaveTextContent("Northstar resumed.");
-    expect(within(screen.getByText("Northstar").closest("tr")!).getByText("Active")).toBeInTheDocument();
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Northstar resumed.",
+    );
+    expect(
+      within(screen.getByText("Northstar").closest("tr")!).getByText("Active"),
+    ).toBeInTheDocument();
     expect(sentBody(spy, "PUT /companies/c2")).toEqual({ active: true });
   });
 
@@ -331,7 +432,9 @@ describe("CompaniesScreen · pause and remove", () => {
     render(<CompaniesScreen />);
 
     const orbit = (await screen.findByText("Orbit")).closest("tr")!;
-    expect(within(orbit).getByText("Needs custom handling")).toBeInTheDocument();
+    expect(
+      within(orbit).getByText("Needs custom handling"),
+    ).toBeInTheDocument();
     expect(within(orbit).queryByText("Paused")).not.toBeInTheDocument();
     expect(within(orbit).getByText("custom")).toBeInTheDocument();
     // A plain paused company keeps the regular state.
@@ -344,12 +447,20 @@ describe("CompaniesScreen · pause and remove", () => {
     render(<CompaniesScreen />);
     const user = userEvent.setup();
 
-    await user.click(await screen.findByRole("button", { name: "Actions for Orbit" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for Orbit" }),
+    );
 
     const menu = screen.getByRole("menu", { name: "Orbit" });
-    expect(within(menu).queryByRole("menuitem", { name: "Resume watching" })).not.toBeInTheDocument();
-    expect(within(menu).getByRole("menuitem", { name: "Edit company" })).toBeInTheDocument();
-    expect(within(menu).getByRole("menuitem", { name: "Remove company" })).toBeInTheDocument();
+    expect(
+      within(menu).queryByRole("menuitem", { name: "Resume watching" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Edit company" }),
+    ).toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Remove company" }),
+    ).toBeInTheDocument();
   });
 
   it("treats an active custom company as a normal row", async () => {
@@ -358,17 +469,25 @@ describe("CompaniesScreen · pause and remove", () => {
 
     const orbit = (await screen.findByText("Orbit")).closest("tr")!;
     expect(within(orbit).getByText("Active")).toBeInTheDocument();
-    expect(within(orbit).queryByText("Needs custom handling")).not.toBeInTheDocument();
+    expect(
+      within(orbit).queryByText("Needs custom handling"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows an alert when pausing fails", async () => {
-    mockApi([HALDEN], { "PUT /companies/c1": () => json(500, { detail: "boom" }) });
+    mockApi([HALDEN], {
+      "PUT /companies/c1": () => json(500, { detail: "boom" }),
+    });
     render(<CompaniesScreen />);
 
     await chooseAction("Halden", "Pause watching");
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong");
-    expect(within(screen.getByText("Halden").closest("tr")!).getByText("Active")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Something went wrong",
+    );
+    expect(
+      within(screen.getByText("Halden").closest("tr")!).getByText("Active"),
+    ).toBeInTheDocument();
   });
 
   it("asks for confirmation before removing", async () => {
@@ -382,10 +501,16 @@ describe("CompaniesScreen · pause and remove", () => {
     expect(dialog).toHaveTextContent("all of its jobs will be deleted");
     expect(spy).toHaveBeenCalledTimes(1); // only the list load
 
-    await user.click(within(dialog).getByRole("button", { name: "Remove company" }));
+    await user.click(
+      within(dialog).getByRole("button", { name: "Remove company" }),
+    );
 
-    await vi.waitFor(() => expect(screen.queryByText("Halden")).not.toBeInTheDocument());
-    expect(screen.getByRole("status")).toHaveTextContent("Halden and its jobs removed.");
+    await vi.waitFor(() =>
+      expect(screen.queryByText("Halden")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Halden and its jobs removed.",
+    );
     expect(screen.getByText("Northstar")).toBeInTheDocument();
     expect(spy.mock.calls[1][0]).toBe("http://api.test/companies/c1");
     expect(spy.mock.calls[1][1]?.method).toBe("DELETE");
@@ -396,7 +521,11 @@ describe("CompaniesScreen · pause and remove", () => {
     render(<CompaniesScreen />);
 
     const user = await chooseAction("Halden", "Remove company");
-    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Cancel",
+      }),
+    );
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByText("Halden")).toBeInTheDocument();
@@ -415,13 +544,21 @@ describe("CompaniesScreen · pause and remove", () => {
 
     const user = await chooseAction("Halden", "Remove company");
     const dialog = screen.getByRole("dialog");
-    await user.click(within(dialog).getByRole("button", { name: "Remove company" }));
+    await user.click(
+      within(dialog).getByRole("button", { name: "Remove company" }),
+    );
 
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent("A run is in progress");
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "A run is in progress",
+    );
     expect(screen.getByText("Halden")).toBeInTheDocument();
 
-    await user.click(within(dialog).getByRole("button", { name: "Remove company" }));
-    await vi.waitFor(() => expect(screen.queryByText("Halden")).not.toBeInTheDocument());
+    await user.click(
+      within(dialog).getByRole("button", { name: "Remove company" }),
+    );
+    await vi.waitFor(() =>
+      expect(screen.queryByText("Halden")).not.toBeInTheDocument(),
+    );
     expect(attempts).toBe(2);
   });
 
@@ -440,10 +577,14 @@ describe("CompaniesScreen · pause and remove", () => {
 
     const user = await chooseAction("Halden", "Remove company");
     await user.click(
-      within(screen.getByRole("dialog")).getByRole("button", { name: "Remove company" }),
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Remove company",
+      }),
     );
 
-    await vi.waitFor(() => expect(screen.queryByText("Halden")).not.toBeInTheDocument());
+    await vi.waitFor(() =>
+      expect(screen.queryByText("Halden")).not.toBeInTheDocument(),
+    );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByText("Northstar")).toBeInTheDocument();
   });
@@ -451,12 +592,17 @@ describe("CompaniesScreen · pause and remove", () => {
   it("shows the added banner with a link to the jobs board", async () => {
     mockApi([HALDEN]);
     render(
-      <CompaniesScreen justAdded={{ name: "Acme", found: 34, matched: 3, via: "greenhouse" }} />,
+      <CompaniesScreen
+        justAdded={{ name: "Acme", found: 34, matched: 3, via: "greenhouse" }}
+      />,
     );
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Acme added. Watching 34 openings via Greenhouse — 3 pass your filters and are already scored.",
     );
-    expect(screen.getByRole("link", { name: "View jobs" })).toHaveAttribute("href", "/jobs");
+    expect(screen.getByRole("link", { name: "View jobs" })).toHaveAttribute(
+      "href",
+      "/jobs",
+    );
   });
 });
 
@@ -480,7 +626,9 @@ describe("CompaniesScreen Run now", () => {
 
   async function openMenu(name: string) {
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: `Actions for ${name}` }));
+    await user.click(
+      await screen.findByRole("button", { name: `Actions for ${name}` }),
+    );
     return user;
   }
 
@@ -489,11 +637,20 @@ describe("CompaniesScreen Run now", () => {
     render(<CompaniesScreen />);
 
     await openMenu("Halden");
-    expect(screen.getByRole("menuitem", { name: "Run now" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Run now" }),
+    ).toBeInTheDocument();
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Actions for Northstar" }));
-    expect(within(screen.getByRole("menu", { name: "Northstar" })).queryByRole("menuitem", { name: "Run now" })).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Actions for Northstar" }),
+    );
+    expect(
+      within(screen.getByRole("menu", { name: "Northstar" })).queryByRole(
+        "menuitem",
+        { name: "Run now" },
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it("posts the company id and confirms the start", async () => {
@@ -503,7 +660,9 @@ describe("CompaniesScreen Run now", () => {
     const user = await openMenu("Halden");
     await user.click(screen.getByRole("menuitem", { name: "Run now" }));
 
-    expect(await screen.findByText("Run started for Halden.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Run started for Halden."),
+    ).toBeInTheDocument();
     expect(sentBody(spy, "POST /runs")).toEqual({ company_id: "c1" });
   });
 
@@ -519,5 +678,50 @@ describe("CompaniesScreen Run now", () => {
     await user.click(screen.getByRole("menuitem", { name: "Run now" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(detail);
+  });
+});
+
+describe("CompaniesScreen links and banners", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("links the company name to its website in a new tab", async () => {
+    mockApi([HALDEN]);
+    render(<CompaniesScreen />);
+
+    const link = await screen.findByRole("link", { name: "Halden" });
+    expect(link).toHaveAttribute("href", "https://halden.example");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("closes a banner with its dismiss button", async () => {
+    mockApi([HALDEN], {
+      "POST /runs": () =>
+        json(202, {
+          id: "r1",
+          status: "running",
+          trigger: "manual",
+          scope: "company",
+          started_at: "2026-05-02T12:00:00Z",
+          jobs_found: 0,
+        }),
+    });
+    render(<CompaniesScreen />);
+
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for Halden" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Run now" }));
+    expect(
+      await screen.findByText("Run started for Halden."),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(
+      screen.queryByText("Run started for Halden."),
+    ).not.toBeInTheDocument();
   });
 });
