@@ -1,7 +1,7 @@
 # Job Lighthouse — Tasks
 
-Tickets for [VERSIONING.md](./VERSIONING.md), broken down small. Planning doc
-only — not synced to GitHub Issues.
+Tickets for [VERSIONING.md](./VERSIONING.md), broken down small. Mirrored as
+GitHub issues; see [agents/issue-tracker.md](./agents/issue-tracker.md).
 
 IDs: `BE-` backend repo, `FE-` frontend repo, `PROJ-` cross-cutting/repo-less.
 
@@ -527,7 +527,7 @@ List view with active/company/tier filters.
 
 BE-019 – BE-026 are merged. Found while building them:
 
-### PROJ-009 · Chromium in the Docker image for dynamic scrapes
+### ~~PROJ-009 · Chromium in the Docker image for dynamic scrapes~~
 
 **Target:** project **Version:** v0.4
 
@@ -537,12 +537,16 @@ company's `RunCompanyResult` is `failed` and no jobs are closed. Install
 Chromium (`playwright install --with-deps chromium`) where the non-root
 `app` user can read it.
 
+Since v0.8 it also breaks detection: `POST /companies/detect` can't use its
+browser fallback, so JS-rendered careers pages come back `needs_custom` and
+pages that block a plain GET come back 422.
+
 **Acceptance criteria:**
 
 - A `dynamic` scraper source fetches successfully in the deployed container
 - The image still passes the Trivy HIGH/CRITICAL gate
 
-### BE-045 · POST /runs can outlive the Nginx proxy timeout
+### ~~BE-045 · POST /runs can outlive the Nginx proxy timeout~~
 
 **Target:** backend **Version:** v0.4
 
@@ -558,7 +562,7 @@ allows it).
 - A run longer than the proxy timeout still gives the client a usable response
 - Lock contention still no-ops (409); a failing run still closes as `failed`
 
-### BE-046 · Paginate GET /jobs
+### ~~BE-046 · Paginate GET /jobs~~
 
 **Target:** backend **Version:** v0.4
 
@@ -574,7 +578,7 @@ Jobs are never deleted, so `GET /jobs` grows without bound.
 
 ## v0.5 — Match scoring
 
-### BE-027 · Config.profile + GET/PUT /config
+### ~~BE-027 · Config.profile + GET/PUT /config~~
 
 **Target:** backend **Version:** v0.5
 
@@ -585,7 +589,7 @@ Add `profile`/`profile_version` to `Config`, expose read/write.
 - `profile_version` increments on every `profile` change
 - No history of past profile text is kept, per design
 
-### BE-028 · Match-scoring agent
+### ~~BE-028 · Match-scoring agent~~
 
 **Target:** backend **Version:** v0.5
 
@@ -612,7 +616,7 @@ Edit the markdown profile text.
 
 ## v0.6 — Notifications
 
-### BE-029 · Transactional email client
+### ~~BE-029 · Transactional email client~~
 
 **Target:** backend **Version:** v0.6
 
@@ -623,7 +627,7 @@ Thin wrapper around the chosen provider (Resend/Postmark/SES).
 - Send succeeds/fails distinguishably (caller can tell if it must not stamp
   `notified_at`)
 
-### BE-030 · Digest send + notified_at stamping
+### ~~BE-030 · Digest send + notified_at stamping~~
 
 **Target:** backend **Version:** v0.6
 
@@ -635,38 +639,11 @@ NULL`; stamp `notified_at` only after provider confirms success.
 - Empty digest set sends no email
 - A failed send leaves `notified_at` null so those jobs reappear next digest
 
-### BE-047 · Config notification preferences
-
-**Target:** backend **Version:** v0.6
-
-Store the Settings → Notifications preferences (FE-010) on `Config` and have
-the digest honor them.
-
-- `notify_email: bool` (default `true`): digest on/off
-- `notify_empty_company: bool` (default `true`): warn when a company returns
-  nothing
-- `notify_min_score: int` 0–100 (default `40`): digest includes only jobs
-  scoring above it; lower-scoring jobs stay on the board
-
-**Depends on:** BE-027 (`GET/PUT /config`), BE-030 (digest send).
-
-**Acceptance criteria:**
-
-- Migration adds the three columns with the defaults above
-- `GET /config` returns them; `PUT /config` accepts them and rejects
-  `notify_min_score` outside 0–100 with 422
-- Digest is skipped when `notify_email = false`
-- Digest excludes jobs at or below `notify_min_score`; they still appear in
-  `GET /jobs`
-- Recorded decision: whether filtered-out jobs get `notified_at` stamped
-
 ### ~~FE-010 · Settings → Notifications tab~~
 
 **Target:** frontend **Version:** v0.6
 
 Notification preferences screen — no Notion-mirror toggle (retired).
-
-**Depends on:** BE-047 (stores the preferences).
 
 **Acceptance criteria:**
 
@@ -676,7 +653,7 @@ Notification preferences screen — no Notion-mirror toggle (retired).
 
 ## v0.7 — Scheduling
 
-### BE-031 · Internal tick loop
+### ~~BE-031 · Internal tick loop~~
 
 **Target:** backend **Version:** v0.7
 
@@ -687,7 +664,7 @@ the last `Runs.started_at` to decide if a run is due.
 
 - Changing `Config.cron` changes behavior on the next tick, no restart needed
 
-### BE-032 · Wire advisory lock into scheduled runs
+### ~~BE-032 · Wire advisory lock into scheduled runs~~
 
 **Target:** backend **Version:** v0.7
 
@@ -712,7 +689,7 @@ Cron editor (including raw cron override per the mockup).
 
 ## v0.8 — Agent-assisted onboarding
 
-### BE-033 · Deterministic ATS signature matcher
+### ~~BE-033 · Deterministic ATS signature matcher~~
 
 **Target:** backend **Version:** v0.8
 
@@ -725,7 +702,7 @@ Lever, Ashby, SmartRecruiters.
   LLM call
 - Unrecognized URL returns no match, doesn't throw
 
-### BE-034 · LLM selector-discovery fallback
+### ~~BE-034 · LLM selector-discovery fallback~~
 
 **Target:** backend **Version:** v0.8
 
@@ -737,7 +714,7 @@ When BE-033 finds no match, an agent reads the page and proposes
 - Returns a draft `Selectors` object when the agent finds a plausible list
 - Returns "needs custom handling" when it can't (feeds v0.10's paused state)
 
-### BE-035 · POST /companies/detect
+### ~~BE-035 · POST /companies/detect~~
 
 **Target:** backend **Version:** v0.8
 
@@ -749,7 +726,7 @@ plus a scored sample of matched openings.
 - Response sample jobs are scored using the existing v0.5 scoring path
 - Confirming persists exactly the returned `Source`, no re-detection
 
-### BE-036 · POST /companies/{id}/test
+### ~~BE-036 · POST /companies/{id}/test~~
 
 **Target:** backend **Version:** v0.8
 
@@ -759,7 +736,7 @@ Re-run a company's existing source, report reachability/job count.
 
 - Reports failure distinctly from "reachable, zero jobs"
 
-### FE-012 · Add-company: paste URL + resolving state
+### ~~FE-012 · Add-company: paste URL + resolving state~~
 
 **Target:** frontend **Version:** v0.8
 
@@ -769,7 +746,7 @@ Paste-a-URL input, "agent resolving: Detected Greenhouse..." loading state.
 
 - Matches the mockup's resolving copy/behavior
 
-### FE-013 · Add-company: confirm + added banner
+### ~~FE-013 · Add-company: confirm + added banner~~
 
 **Target:** frontend **Version:** v0.8
 
@@ -779,11 +756,107 @@ Confirm screen showing the scored sample; on confirm, success banner.
 
 - Confirm calls the persist step and the company appears in FE-004's list
 
+### v0.8 follow-ups
+
+Found while building BE-033 – BE-036 (#106, #107). The dynamic fallback
+also needs PROJ-009 (Chromium in the image).
+
+### ~~BE-048 · POST /companies/detect can outlive the Nginx proxy timeout~~
+
+**Target:** backend **Version:** v0.8
+
+Detect runs inside the request. Worst case: a static GET, an LLM call on
+~60k chars, a browser render, a second LLM call, then scoring 5 jobs. Each
+OpenAI call can take up to 60s, and `nginx/` sets no `proxy_read_timeout`
+(60s default). The client then gets a 504 instead of `DetectOut`.
+
+**Acceptance criteria:**
+
+- A slow detect still gives the client a usable response (e.g. a total time
+  budget inside the request, or 202 + poll like BE-045)
+- The add-company flow (FE-012) still shows the resolving state
+
+### BE-053 · Let slow selector discovery finish instead of timing out
+
+**Target:** backend **Version:** v0.8
+
+BE-048's 50s budget fits under Nginx's 60s default, but discovery's worst
+case is far longer (two LLM calls of up to 60s each, plus a 40s render).
+A slow page that would have worked comes back `needs_custom` with
+"detection took too long". Also, work already running in a thread (fetch,
+render) isn't cancelled when the budget runs out.
+
+**Acceptance criteria:**
+
+- Decide from real timings whether the budget is too tight (e.g. log how
+  long detects take and how often they time out)
+- If it is: raise `proxy_read_timeout` for `/companies/detect` only, raise
+  `DETECT_BUDGET_SECONDS` to stay under it, and check the frontend's own
+  request timeout allows it
+
+### ~~BE-049 · Rate-limit POST /companies/detect~~
+
+**Target:** backend **Version:** v0.8
+
+Signup is open, and one detect request can mean a headless render, 2
+selector-discovery calls and 5 scoring calls. Nothing bounds how often a
+user can call it.
+
+**Acceptance criteria:**
+
+- Per-user limit on detect calls (e.g. N per hour); over it returns 429
+- The limit is set from an env var with a sane default
+- No Redis or other new service (see CLAUDE.md out-of-scope list)
+
+### ~~BE-050 · Detect boards embedded on a company's own careers page~~
+
+**Target:** backend **Version:** v0.8
+
+`match_board` only checks the pasted URL. A page like `acme.com/careers`
+that embeds Greenhouse, Lever or Ashby (script tag or iframe) isn't matched.
+`clean_html` also strips that script/iframe, so the LLM can't see it either.
+This is probably the most common thing users paste.
+
+**Acceptance criteria:**
+
+- A careers page embedding a known board's widget resolves to a `board`
+  source, with no LLM call
+- Embed detection reads the fetched HTML (script `src`, iframe `src`,
+  links); only known board hosts count
+
+### ~~BE-051 · Wait for client-rendered job lists in selector discovery~~
+
+**Target:** backend **Version:** v0.8
+
+`render_page` without `wait_for` returns the HTML at the `load` event.
+Single-page apps that fetch jobs after load look empty, so discovery comes
+back `needs_custom`.
+
+**Acceptance criteria:**
+
+- Discovery's render waits for the page to settle (e.g. network idle,
+  bounded by the existing render timeout)
+- Scheduled `dynamic` scrapes keep waiting on `selectors.job` as today
+
+### ~~BE-052 · Support EU-hosted Greenhouse and Lever boards~~
+
+**Target:** backend **Version:** v0.8
+
+`*.eu.greenhouse.io` and `jobs.eu.lever.co` use other API hosts than the
+board fetchers call, so BE-033 doesn't match them. They fall through to
+selector discovery.
+
+**Acceptance criteria:**
+
+- EU board URLs resolve to a `board` source and fetch from the right API host
+- The stored `Source` records the region (schema change agreed in
+  SYSTEM_DESIGN.md first)
+
 ---
 
 ## v0.9 — Runs visibility
 
-### BE-037 · GET /runs
+### ~~BE-037 · GET /runs~~
 
 **Target:** backend **Version:** v0.9
 
@@ -794,7 +867,7 @@ Run history for the dashboard.
 - Ordered most-recent first
 - Only returns the requesting user's runs
 
-### BE-038 · GET /runs/{id}/companies
+### ~~BE-038 · GET /runs/{id}/companies~~
 
 **Target:** backend **Version:** v0.9
 
@@ -804,7 +877,7 @@ Per-company breakdown for one run, from `RunCompanyResult`.
 
 - 404 if the run doesn't belong to the requesting user
 
-### FE-014 · Runs screen
+### ~~FE-014 · Runs screen~~
 
 **Target:** frontend **Version:** v0.9
 
@@ -818,7 +891,7 @@ Next run estimate, today's totals, run history, per-company breakdown.
 
 ## v0.10 — Custom handler escape hatch
 
-### BE-039 · Source.kind: "custom" support
+### ~~BE-039 · Source.kind: "custom" support~~
 
 **Target:** backend **Version:** v0.10
 
@@ -829,7 +902,7 @@ Extend the `Source` union/validation to accept `{kind: "custom", handler}`.
 - `POST`/`PUT /companies` accept a `custom` source (previously rejected in
   BE-017)
 
-### BE-040 · Pipeline support for custom handlers
+### ~~BE-040 · Pipeline support for custom handlers~~
 
 **Target:** backend **Version:** v0.10
 
@@ -843,7 +916,7 @@ Steps 2/5 dispatch to a per-company handler function keyed by
 - Handler's own success/failure feeds `RunCompanyResult` and the step-5
   close-disappeared-jobs decision
 
-### FE-015 · "Needs custom handling" paused state
+### ~~FE-015 · "Needs custom handling" paused state~~
 
 **Target:** frontend **Version:** v0.10
 
@@ -859,7 +932,7 @@ no handler yet.
 
 ## v0.11 — Account completeness
 
-### BE-041 · POST /auth/password-reset/request
+### ~~BE-041 · POST /auth/password-reset/request~~
 
 **Target:** backend **Version:** v0.11
 
@@ -870,7 +943,7 @@ Issue a `PasswordResetToken`, email the reset link.
 - Unknown email still returns a generic success response (no enumeration)
 - Token stored hashed, never the raw value
 
-### BE-042 · POST /auth/password-reset/confirm
+### ~~BE-042 · POST /auth/password-reset/confirm~~
 
 **Target:** backend **Version:** v0.11
 
@@ -881,7 +954,7 @@ Verify token, set new password, mark token used.
 - Expired or already-used token is rejected
 - Token can't be reused after a successful confirm
 
-### BE-043 · GET /account/export
+### ~~BE-043 · GET /account/export~~
 
 **Target:** backend **Version:** v0.11
 
@@ -892,7 +965,7 @@ JSON export of all rows owned by the requesting user across every table.
 - Export includes Config, Companies, Jobs, Runs, RunCompanyResults for that
   user only
 
-### BE-044 · DELETE /account
+### ~~BE-044 · DELETE /account~~
 
 **Target:** backend **Version:** v0.11
 
@@ -905,7 +978,7 @@ Delete the account, cascading to all owned rows.
 - JWTs for the deleted user are rejected immediately after (or on next
   validation) even if not yet expired
 
-### FE-016 · Forgot-password flow
+### ~~FE-016 · Forgot-password flow~~
 
 **Target:** frontend **Version:** v0.11
 
@@ -916,7 +989,7 @@ Request-reset form + set-new-password form (from emailed link).
 - Both request and confirm show a generic success message even on invalid
   input, matching BE-041's non-enumeration behavior
 
-### FE-017 · Settings → Account tab (export/delete)
+### ~~FE-017 · Settings → Account tab (export/delete)~~
 
 **Target:** frontend **Version:** v0.11
 
@@ -926,9 +999,50 @@ Change credentials (already v0.2), plus export and delete-account actions.
 
 - Delete requires an explicit confirmation step before calling the API
 
+### ~~PROJ-010 · README and CLAUDE.md catch-up~~
+
+**Target:** project **Version:** v0.11
+
+The README only covered infra; CLAUDE.md still described an empty skeleton.
+
+**Acceptance criteria:**
+
+- README has a feature summary, prerequisites, a quick start and a tests
+  section, and links to the docs instead of repeating them
+- CLAUDE.md's stack and current state match the code, with repo
+  pitfalls listed once
+
 ---
 
 ## v1.0 — Cutover
+
+### ~~PROJ-011 · Reload the compose Nginx after each deploy~~
+
+**Target:** project **Version:** v1.0
+
+The compose Nginx resolves `job-runner` and `companies` to IPs once, at
+start. Deploys recreate both app containers but leave Nginx running, so it
+proxied to stale IPs and every route returned FastAPI's 404. Edits to
+`nginx/default.conf` also never took effect on deploy.
+
+**Acceptance criteria:**
+
+- `deploy.sh` reloads the compose Nginx after `compose up`
+- After a deploy, `GET /jobs` without a token returns 401, not 404
+
+### ~~PROJ-013 · /ticket skill: ticket to PR in one command~~
+
+**Target:** project **Version:** v1.0
+
+Every ticket ran the same manual loop: fetch `main`, branch, implement,
+update docs, run checks, push, open the PR.
+
+**Acceptance criteria:**
+
+- `.claude/skills/ticket/SKILL.md` runs that loop, user-invoked only
+- `/ticket <ID>` and `/ticket #<issue>` both resolve to the same ticket
+  and issue
+- CLAUDE.md's ticket workflow mentions `/ticket`
 
 ### PROJ-005 · One-time company import script
 
@@ -979,3 +1093,133 @@ old script's trigger, monitor first live scheduled run end-to-end.
 
 - First post-cutover digest arrives from the new system, not the old script
 - Old script's GitHub Actions trigger is disabled (not just unused)
+
+### ~~PROJ-012 · Agent skills setup, domain glossary and v1.1 planning docs~~
+
+**Target:** project **Version:** v1.0
+
+Agent-skills config (`docs/agents/`), `CONTEXT.md` glossary, ADR 0001, and
+the tickets from spec #126 mirrored here. Issue: #132.
+
+**Acceptance criteria:**
+
+- Files on `main`; this file and `VERSIONING.md` match the published issues
+
+### ~~BE-054 · Pausing a company leaves its jobs alone~~
+
+**Target:** backend **Version:** v1.0
+
+Pausing a Company stops it being fetched but leaves its Jobs as they were.
+Resuming changes no Job either. Paused companies' Jobs are left out of the
+Digest. `GET /jobs` items gain `company_active`. Spec: #126. Issue: #127.
+
+**Acceptance criteria:**
+
+- Pause/resume change no Job
+- Digest = open, unsent Jobs whose Company isn't paused
+- `GET /jobs` items include `company_active: bool`
+
+### BE-055 · Run breakdown keeps the company name it ran with
+
+**Target:** backend **Version:** v1.0
+
+`RunCompanyResult` stores the Company name at run time; `company_id` becomes
+nullable (`ON DELETE SET NULL`). Groundwork for BE-056. Issue: #128.
+
+**Acceptance criteria:**
+
+- Existing rows backfilled with the current name
+- `/runs/{id}/companies` shows the current name, or the stored one with
+  `company_id: null` once the Company is gone
+
+### BE-056 · Delete a company
+
+**Target:** backend **Version:** v1.0
+
+`DELETE /companies/{id}` removes the Company and its Jobs, keeps run history
+(ADR 0001). Blocked by BE-055. Issue: #129.
+
+**Acceptance criteria:**
+
+- `204` / `404` (missing or another user's) / `409` while a run holds the lock
+- Jobs deleted; `Runs` and breakdown rows kept with the stored name
+- Re-adding the same Company stores its postings as new Jobs
+
+### FE-019 · Job list follows the cursor
+
+**Target:** frontend **Version:** v1.0
+
+Page through all Jobs with `X-Next-Cursor` ("Load more" or infinite scroll).
+Issue: job-lighthouse-frontend#43.
+
+**Acceptance criteria:**
+
+- Next page requested with the cursor until the header is absent
+- Changing filters resets the list
+
+### FE-020 · Delete company action and paused badge on jobs
+
+**Target:** frontend **Version:** v1.0
+
+Delete a Company from its row menu (confirm, 409 retry message); mark Jobs of
+Paused companies via `company_active`. Blocked by BE-054, BE-056. Issue:
+job-lighthouse-frontend#44.
+
+**Acceptance criteria:**
+
+- Delete with confirm dialog; 204 / 404 / 409 handled
+- Jobs with `company_active: false` show a paused badge
+
+---
+
+## v1.1 — Company and run controls
+
+### BE-057 · Total job count on the first page of GET /jobs
+
+**Target:** backend **Version:** v1.1
+
+`X-Total-Count` header on `GET /jobs` without a cursor, respecting filters,
+exposed via CORS. Issue: #130.
+
+**Acceptance criteria:**
+
+- Count matches the filters; header absent on cursor pages
+- Header in CORS `expose_headers`
+
+### BE-058 · Single-company run
+
+**Target:** backend **Version:** v1.1
+
+`POST /runs` with optional `{ company_id }`. `Runs` gains `scope` and
+`company_id`; the scheduler counts only Full runs. Blocked by BE-056.
+Issue: #131.
+
+**Acceptance criteria:**
+
+- `404` (missing or another user's) / `409` paused / `409` run in progress
+- One Company fetched, one `RunCompanyResult`, normal Digest sent
+- A recent Single-company run doesn't make a Full run "not due"
+- `GET /runs` returns `scope` and `company_id`
+
+### FE-021 · Show the job total
+
+**Target:** frontend **Version:** v1.1
+
+Show "N of total" from the first page's `X-Total-Count`. Blocked by BE-057,
+FE-019. Issue: job-lighthouse-frontend#45.
+
+**Acceptance criteria:**
+
+- Total kept across "Load more", refreshed on filter change
+
+### FE-022 · Run this company button and scope in run history
+
+**Target:** frontend **Version:** v1.1
+
+"Run now" per active Company; run history marks Single-company runs with the
+Company name. Blocked by BE-058. Issue: job-lighthouse-frontend#46.
+
+**Acceptance criteria:**
+
+- 404 / 409 messages shown
+- Single-company runs shown distinctly, including for Deleted companies
