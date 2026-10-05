@@ -18,8 +18,10 @@ export type Job = {
   date: string;
   /** ISO timestamp; null = not yet included in a sent digest. */
   notified_at: string | null;
-  /** false = the posting closed (or its company was paused). Not a user dismissal. */
+  /** false = the posting closed. Not a user dismissal, and unaffected by pausing the company. */
   active: boolean;
+  /** false = the job's company is paused: its jobs stay listed but are left out of the digest. */
+  company_active: boolean;
 };
 
 export type JobsPage = {

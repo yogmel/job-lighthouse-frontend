@@ -60,6 +60,18 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
     };
   }, []);
 
+  /** The company is already gone on the server: reload the list to match. */
+  async function onGone(company: Company) {
+    setRemoving(undefined);
+    setActionError(undefined);
+    try {
+      setState({ status: "ready", companies: await listCompanies() });
+      setBanner(`${company.name} was already removed.`);
+    } catch (err) {
+      setActionError(errorMessage(err));
+    }
+  }
+
   function onCreated(company: Company) {
     setState((prev) =>
       prev.status === "ready" ? { ...prev, companies: [...prev.companies, company] } : prev,
@@ -104,7 +116,7 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
         : prev,
     );
     setRemoving(undefined);
-    setBanner(`${company.name} removed.`);
+    setBanner(`${company.name} and its jobs removed.`);
   }
 
   function menuItems(company: Company): RowMenuItem[] {
@@ -225,6 +237,7 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
           key={removing.id}
           company={removing}
           onRemoved={onRemoved}
+          onGone={onGone}
           onClose={() => setRemoving(undefined)}
         />
       )}

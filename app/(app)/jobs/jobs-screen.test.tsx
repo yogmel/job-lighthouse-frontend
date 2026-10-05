@@ -43,6 +43,7 @@ function job(overrides: Partial<Job>): Job {
     date: "2026-09-20T12:00:00Z",
     notified_at: null,
     active: true,
+    company_active: true,
     ...overrides,
   };
 }
@@ -151,6 +152,18 @@ describe("JobsScreen", () => {
     const row = screen.getByText("Data Engineer").closest("li")!;
     expect(within(row).getByText("Closed")).toBeInTheDocument();
     expect(screen.queryByText("Frontend Engineer")).not.toBeInTheDocument();
+  });
+
+  it("marks jobs of a paused company without calling them closed", async () => {
+    const paused = job({ id: "j4", title: "SRE", company_active: false });
+    mockApi([FRONTEND, paused], [HALDEN]);
+    render(<JobsScreen />);
+
+    const row = (await screen.findByText("SRE")).closest("li")!;
+    expect(within(row).getByText("Paused")).toBeInTheDocument();
+    expect(within(row).queryByText("Closed")).not.toBeInTheDocument();
+    const open = screen.getByText("Frontend Engineer").closest("li")!;
+    expect(within(open).queryByText("Paused")).not.toBeInTheDocument();
   });
 
   it("filters by company id", async () => {
