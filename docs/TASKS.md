@@ -1145,7 +1145,7 @@ nullable (`ON DELETE SET NULL`). Groundwork for BE-056. Issue: #128.
 - Jobs deleted; `Runs` and breakdown rows kept with the stored name
 - Re-adding the same Company stores its postings as new Jobs
 
-### FE-019 · Job list follows the cursor
+### ~~FE-019 · Job list follows the cursor~~
 
 **Target:** frontend **Version:** v1.0
 
@@ -1154,8 +1154,13 @@ Issue: job-lighthouse-frontend#43.
 
 **Acceptance criteria:**
 
-- Next page requested with the cursor until the header is absent
-- Changing filters resets the list
+- [x] Next page requested with the cursor until the header is absent
+- [x] No "Load more" or extra requests once the header is absent
+- [x] Changing filters resets the list (filters are client-side, so the loaded
+      pages and cursor stay valid; nothing to refetch)
+- [x] No duplicate or skipped Jobs when a Run adds Jobs between page loads
+      (server keyset cursor; client drops repeated ids; a finished Run restarts
+      from the first page)
 
 ### FE-020 · Delete company action and paused badge on jobs
 

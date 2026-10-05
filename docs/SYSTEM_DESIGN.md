@@ -360,7 +360,7 @@ location?: string;
 | `POST`   | `/companies/detect`           | given a careers URL, run ATS detection (+ fallback agent), return a draft Source and a scored sample |
 | `PUT`    | `/companies/{id}`             | modify company                                           |
 | `POST`   | `/companies/{id}/test`        | re-test a company's source; report reachability/count    |
-| `GET`    | `/jobs`                       | fetch all jobs                                           |
+| `GET`    | `/jobs`                       | one page of jobs (`limit`, `cursor`); `X-Next-Cursor` while more remain |
 | `GET`    | `/config`                     | fetch configuration                                      |
 | `PUT`    | `/config`                     | modify configuration                                     |
 | `POST`   | `/runs`                       | trigger a run now (manual)                               |

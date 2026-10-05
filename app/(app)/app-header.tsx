@@ -114,7 +114,7 @@ export function AppHeader() {
   useEffect(() => {
     let cancelled = false;
     listJobs().then(
-      (jobs) => !cancelled && setCounts((prev) => ({ ...prev, jobs: jobs.length })),
+      (page) => !cancelled && setCounts((prev) => ({ ...prev, jobs: page.jobs.length })),
       () => {},
     );
     return () => {

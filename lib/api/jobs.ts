@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetchWithHeaders } from "./client";
 
 export type Job = {
   id: string;
@@ -22,11 +22,19 @@ export type Job = {
   active: boolean;
 };
 
+export type JobsPage = {
+  jobs: Job[];
+  /** From `X-Next-Cursor`; null on the last page. */
+  nextCursor: string | null;
+};
+
 /**
- * Fetches every job; the board filters in the browser. Tier lives on the
- * company (a client-side grouping key) and `GET /jobs` query param names
- * aren't in SYSTEM_DESIGN.md yet.
+ * Fetches one page of jobs (newest first); pass the previous page's
+ * `nextCursor` to continue. The board filters in the browser, so the cursor
+ * walks the unfiltered list.
  */
-export function listJobs(): Promise<Job[]> {
-  return apiFetch<Job[]>("/jobs");
+export async function listJobs(cursor?: string | null): Promise<JobsPage> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  const { data, headers } = await apiFetchWithHeaders<Job[]>(`/jobs${query}`);
+  return { jobs: data, nextCursor: headers.get("X-Next-Cursor") };
 }
