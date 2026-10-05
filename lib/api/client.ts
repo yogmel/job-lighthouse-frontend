@@ -49,10 +49,15 @@ function endSession(): void {
   hardRedirect(loginUrl(`${window.location.pathname}${window.location.search}`));
 }
 
-export async function apiFetch<T>(
+export async function apiFetch<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
+  return (await apiFetchWithHeaders<T>(path, init)).data;
+}
+
+/** Like `apiFetch`, for endpoints that return data in response headers (e.g. `X-Next-Cursor`). */
+export async function apiFetchWithHeaders<T>(
   path: string,
   { auth = true, ...init }: ApiRequestInit = {},
-): Promise<T> {
+): Promise<{ data: T; headers: Headers }> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
   if (init.body !== undefined && !headers.has("Content-Type")) {
@@ -83,5 +88,5 @@ export async function apiFetch<T>(
     throw new ApiError(res.status, detail);
   }
 
-  return body as T;
+  return { data: body as T, headers: res.headers };
 }

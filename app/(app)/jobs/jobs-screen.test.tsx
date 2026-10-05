@@ -92,6 +92,26 @@ function mockApi(
   });
 }
 
+/** Serves `GET /jobs` pages by cursor ("" = first page); `next` becomes `X-Next-Cursor`. */
+function mockPages(pages: Record<string, { jobs: Job[]; next?: string }>, companies: Company[]) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname === "/companies") return json(200, companies);
+    const page = pages[url.searchParams.get("cursor") ?? ""];
+    if (url.pathname !== "/jobs" || !page) throw new Error(`Unexpected request: ${input}`);
+    return new Response(JSON.stringify(page.jobs), {
+      status: 200,
+      headers: { "Content-Type": "application/json", ...(page.next && { "X-Next-Cursor": page.next }) },
+    });
+  });
+}
+
+function jobRequests(spy: ReturnType<typeof mockApi>): string[] {
+  return spy.mock.calls
+    .map(([input]) => String(input).replace("http://api.test", ""))
+    .filter((path) => path.startsWith("/jobs"));
+}
+
 function calls(spy: ReturnType<typeof mockApi>, key: string): number {
   return spy.mock.calls.filter(
     ([input, init]) => `${init?.method ?? "GET"} ${String(input).replace("http://api.test", "")}` === key,
@@ -208,6 +228,109 @@ describe("JobsScreen", () => {
   });
 });
 
+describe("JobsScreen · paging", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("loads the next page with the cursor and appends it", async () => {
+    const spy = mockPages({ "": { jobs: [FRONTEND], next: "c1" }, c1: { jobs: [PLATFORM] } }, [
+      HALDEN,
+      NORTHSTAR,
+    ]);
+    const user = userEvent.setup();
+    render(<JobsScreen />);
+
+    await user.click(await screen.findByRole("button", { name: "Load more" }));
+
+    expect(await screen.findByText("Platform Engineer")).toBeInTheDocument();
+    expect(screen.getByText("Frontend Engineer")).toBeInTheDocument();
+    expect(jobRequests(spy)).toEqual(["/jobs", "/jobs?cursor=c1"]);
+  });
+
+  it("stops offering more once the header is absent", async () => {
+    const spy = mockPages({ "": { jobs: [FRONTEND], next: "c1" }, c1: { jobs: [PLATFORM] } }, [
+      HALDEN,
+      NORTHSTAR,
+    ]);
+    const user = userEvent.setup();
+    render(<JobsScreen />);
+
+    await user.click(await screen.findByRole("button", { name: "Load more" }));
+    await screen.findByText("Platform Engineer");
+
+    expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
+    expect(jobRequests(spy)).toHaveLength(2);
+  });
+
+  it("has no Load more on a single page", async () => {
+    mockPages({ "": { jobs: [FRONTEND] } }, [HALDEN]);
+    render(<JobsScreen />);
+
+    expect(await screen.findByText("Frontend Engineer")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
+  });
+
+  it("doesn't show a job twice when pages overlap", async () => {
+    mockPages({ "": { jobs: [FRONTEND], next: "c1" }, c1: { jobs: [FRONTEND, PLATFORM] } }, [
+      HALDEN,
+      NORTHSTAR,
+    ]);
+    const user = userEvent.setup();
+    render(<JobsScreen />);
+
+    await user.click(await screen.findByRole("button", { name: "Load more" }));
+
+    await screen.findByText("Platform Engineer");
+    expect(screen.getAllByText("Frontend Engineer")).toHaveLength(1);
+  });
+
+  it("keeps loaded jobs and the button when a page fails, so it can be retried", async () => {
+    let fail = true;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/companies") return json(200, [HALDEN, NORTHSTAR]);
+      if (!url.searchParams.has("cursor")) {
+        return new Response(JSON.stringify([FRONTEND]), {
+          status: 200,
+          headers: { "Content-Type": "application/json", "X-Next-Cursor": "c1" },
+        });
+      }
+      if (fail) throw new TypeError("Failed to fetch");
+      return json(200, [PLATFORM]);
+    });
+    const user = userEvent.setup();
+    render(<JobsScreen />);
+
+    await user.click(await screen.findByRole("button", { name: "Load more" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/can't reach the server/i);
+    expect(screen.getByText("Frontend Engineer")).toBeInTheDocument();
+
+    fail = false;
+    await user.click(screen.getByRole("button", { name: "Load more" }));
+
+    expect(await screen.findByText("Platform Engineer")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("keeps the loaded pages and cursor when filters change", async () => {
+    const spy = mockPages({ "": { jobs: [FRONTEND], next: "c1" }, c1: { jobs: [PLATFORM] } }, [
+      HALDEN,
+      NORTHSTAR,
+    ]);
+    const user = userEvent.setup();
+    render(<JobsScreen />);
+    await screen.findByText("Frontend Engineer");
+
+    await user.selectOptions(screen.getByLabelText("Company"), "Northstar");
+    expect(screen.getByRole("button", { name: "Load more" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Load more" }));
+
+    expect(await screen.findByText("Platform Engineer")).toBeInTheDocument();
+    expect(jobRequests(spy)).toEqual(["/jobs", "/jobs?cursor=c1"]);
+  });
+});
+
 describe("JobsScreen · runs", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -252,6 +375,40 @@ describe("JobsScreen · runs", () => {
 
     expect(await screen.findByText("Platform Engineer")).toBeInTheDocument();
     expect(calls(spy, "GET /jobs")).toBe(2);
+  });
+
+  it("starts over from the first page when a finished run reloads the list", async () => {
+    const NEWEST = job({ id: "j4", title: "Newest Role", url: "https://halden.example/jobs/4" });
+    let ran = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/companies") return json(200, [HALDEN, NORTHSTAR]);
+      if (url.pathname === "/runs") {
+        ran = true;
+        return json(200, { ...RUN, status: "success", jobs_found: 1 });
+      }
+      const cursor = url.searchParams.get("cursor");
+      if (cursor) return json(200, [PLATFORM]);
+      return new Response(JSON.stringify(ran ? [NEWEST, FRONTEND] : [FRONTEND]), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "X-Next-Cursor": "c1" },
+      });
+    });
+    const user = userEvent.setup();
+    render(
+      <RunProvider>
+        <TriggerButton />
+        <JobsScreen />
+      </RunProvider>,
+    );
+    await user.click(await screen.findByRole("button", { name: "Load more" }));
+    await screen.findByText("Platform Engineer");
+
+    await user.click(screen.getByRole("button", { name: "Trigger" }));
+
+    expect(await screen.findByText("Newest Role")).toBeInTheDocument();
+    expect(screen.queryByText("Platform Engineer")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Load more" })).toBeInTheDocument();
   });
 
   it("doesn't reload jobs for a run that's still going", async () => {

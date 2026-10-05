@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { listCompanies, type Company } from "@/lib/api/companies";
 import { toFormErrors } from "@/lib/api/errors";
-import { listJobs, type Job } from "@/lib/api/jobs";
+import { listJobs, type Job, type JobsPage } from "@/lib/api/jobs";
 import { useRuns } from "../run-context";
 import { DEFAULT_FILTERS, JobFilters, type Filters } from "./job-filters";
 import { JobsList, type JobRow } from "./jobs-list";
@@ -11,10 +11,22 @@ import { JobsList, type JobRow } from "./jobs-list";
 type State =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "ready"; jobs: Job[]; companies: Company[] };
+  | {
+      status: "ready";
+      jobs: Job[];
+      /** Cursor for the next page; null once the last page is loaded. */
+      nextCursor: string | null;
+      companies: Company[];
+    };
 
 function errorMessage(err: unknown): string {
   return toFormErrors(err, []).formError ?? "Something went wrong. Please try again.";
+}
+
+/** Appends a page, skipping Jobs already loaded. */
+function appendPage(jobs: Job[], page: JobsPage): Job[] {
+  const seen = new Set(jobs.map((job) => job.id));
+  return [...jobs, ...page.jobs.filter((job) => !seen.has(job.id))];
 }
 
 function toRows(jobs: Job[], companies: Company[]): JobRow[] {
@@ -42,12 +54,16 @@ function isDefault(filters: Filters): boolean {
 export function JobsScreen() {
   const [state, setState] = useState<State>({ status: "loading" });
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<string>();
   const { triggered } = useRuns();
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([listJobs(), listCompanies()]).then(
-      ([jobs, companies]) => !cancelled && setState({ status: "ready", jobs, companies }),
+      ([page, companies]) =>
+        !cancelled &&
+        setState({ status: "ready", jobs: page.jobs, nextCursor: page.nextCursor, companies }),
       (err: unknown) => !cancelled && setState({ status: "error", message: errorMessage(err) }),
     );
     return () => {
@@ -60,14 +76,42 @@ export function JobsScreen() {
   useEffect(() => {
     if (!finishedRun) return;
     let cancelled = false;
+    // Starts over from the first page: the new jobs sit at the top, so the loaded pages and cursor are stale.
     listJobs().then(
-      (jobs) => !cancelled && setState((prev) => (prev.status === "ready" ? { ...prev, jobs } : prev)),
+      (page) =>
+        !cancelled &&
+        setState((prev) =>
+          prev.status === "ready"
+            ? { ...prev, jobs: page.jobs, nextCursor: page.nextCursor }
+            : prev,
+        ),
       () => {},
     );
     return () => {
       cancelled = true;
     };
   }, [finishedRun]);
+
+  const nextCursor = state.status === "ready" ? state.nextCursor : null;
+
+  async function loadMore() {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    setMoreError(undefined);
+    try {
+      const page = await listJobs(nextCursor);
+      // Ignore the page if a reload replaced the list (and cursor) meanwhile.
+      setState((prev) =>
+        prev.status === "ready" && prev.nextCursor === nextCursor
+          ? { ...prev, jobs: appendPage(prev.jobs, page), nextCursor: page.nextCursor }
+          : prev,
+      );
+    } catch (err) {
+      setMoreError(errorMessage(err));
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   const rows = state.status === "ready" ? toRows(state.jobs, state.companies) : [];
   const visible = rows.filter((job) => matches(job, filters));
@@ -117,6 +161,21 @@ export function JobsScreen() {
               </div>
             ) : (
               <JobsList jobs={visible} />
+            )}
+            {moreError && (
+              <p role="alert" className="text-sm text-danger">
+                {moreError}
+              </p>
+            )}
+            {nextCursor && (
+              <button
+                type="button"
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="self-center rounded-md border border-divider px-4 py-2 text-sm font-semibold hover:border-accent disabled:opacity-60"
+              >
+                {loadingMore ? "Loading…" : "Load more"}
+              </button>
             )}
           </>
         ))}
