@@ -1214,7 +1214,7 @@ Issue: #131.
 - A recent Single-company run doesn't make a Full run "not due"
 - `GET /runs` returns `scope` and `company_id`
 
-### FE-021 · Show the job total
+### ~~FE-021 · Show the job total~~
 
 **Target:** frontend **Version:** v1.1
 
@@ -1223,7 +1223,12 @@ FE-019. Issue: job-lighthouse-frontend#45.
 
 **Acceptance criteria:**
 
-- Total kept across "Load more", refreshed on filter change
+- [x] The total is read from the first page's `X-Total-Count` and shown next
+      to the list ("N of total jobs", N = jobs loaded so far)
+- [x] Total kept across "Load more", refreshed on filter change (filters are
+      client-side, so it only changes when a finished Run restarts from the
+      first page)
+- [x] Nothing breaks if the header is missing (no total shown)
 
 ### FE-022 · Run this company button and scope in run history
 

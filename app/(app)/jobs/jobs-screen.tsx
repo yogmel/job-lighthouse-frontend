@@ -16,6 +16,8 @@ type State =
       jobs: Job[];
       /** Cursor for the next page; null once the last page is loaded. */
       nextCursor: string | null;
+      /** Match count from the first page; kept while paging, null if the backend didn't send it. */
+      total: number | null;
       companies: Company[];
     };
 
@@ -63,7 +65,11 @@ export function JobsScreen() {
     Promise.all([listJobs(), listCompanies()]).then(
       ([page, companies]) =>
         !cancelled &&
-        setState({ status: "ready", jobs: page.jobs, nextCursor: page.nextCursor, companies }),
+        setState({ status: "ready", jobs: page.jobs,
+          nextCursor: page.nextCursor,
+          total: page.total,
+          companies,
+        }),
       (err: unknown) => !cancelled && setState({ status: "error", message: errorMessage(err) }),
     );
     return () => {
@@ -82,7 +88,7 @@ export function JobsScreen() {
         !cancelled &&
         setState((prev) =>
           prev.status === "ready"
-            ? { ...prev, jobs: page.jobs, nextCursor: page.nextCursor }
+            ? { ...prev, jobs: page.jobs, nextCursor: page.nextCursor, total: page.total }
             : prev,
         ),
       () => {},
@@ -122,7 +128,17 @@ export function JobsScreen() {
       <div className="flex flex-col gap-1">
         <h1 className="font-heading text-3xl">Jobs</h1>
         {state.status === "ready" && rows.length > 0 && (
-          <p className="text-sm text-muted">{openCount} open</p>
+          <p className="flex gap-2 text-sm text-muted">
+            <span>{openCount} open</span>
+            {state.total !== null && (
+              <>
+                <span aria-hidden>·</span>
+                <span>
+                  {rows.length} of {state.total} jobs
+                </span>
+              </>
+            )}
+          </p>
         )}
       </div>
 

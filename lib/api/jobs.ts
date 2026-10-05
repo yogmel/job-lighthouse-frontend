@@ -28,6 +28,8 @@ export type JobsPage = {
   jobs: Job[];
   /** From `X-Next-Cursor`; null on the last page. */
   nextCursor: string | null;
+  /** From `X-Total-Count`; only the first page sends it, so null on later pages or if absent. */
+  total: number | null;
 };
 
 /**
@@ -38,5 +40,10 @@ export type JobsPage = {
 export async function listJobs(cursor?: string | null): Promise<JobsPage> {
   const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
   const { data, headers } = await apiFetchWithHeaders<Job[]>(`/jobs${query}`);
-  return { jobs: data, nextCursor: headers.get("X-Next-Cursor") };
+  const total = Number.parseInt(headers.get("X-Total-Count") ?? "", 10);
+  return {
+    jobs: data,
+    nextCursor: headers.get("X-Next-Cursor"),
+    total: Number.isFinite(total) && total >= 0 ? total : null,
+  };
 }
