@@ -22,6 +22,8 @@ const run = (id: string, started_at: string, patch: Partial<Run> = {}): Run => (
   finished_at: started_at,
   status: "success",
   trigger: "cron",
+  scope: "full",
+  company_id: null,
   jobs_found: 0,
   error: null,
   ...patch,

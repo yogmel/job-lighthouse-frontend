@@ -25,7 +25,7 @@ function Dot({ result }: { result: RunCompanyResult }) {
 }
 
 function describe(result: RunCompanyResult, company: Company | undefined): string {
-  const parts = [company?.name ?? "Removed company"];
+  const parts = [result.company_name || company?.name || "Removed company"];
   if (company) parts.push(sourceLabel(company.source));
   if (result.status !== "skipped") parts.push(plural(result.jobs_found, "job"));
   if (result.status === "ok" && result.jobs_found <= 1 && !result.error) parts.push("likely partial");

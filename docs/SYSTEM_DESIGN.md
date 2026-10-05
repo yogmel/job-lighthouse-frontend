@@ -261,6 +261,8 @@ started_at: Date;
 finished_at: Date | null;
 status: "running" | "success" | "failed";
 trigger: "cron" | "manual";
+scope: "full" | "company"; // "company" = Single-company run
+company_id: string | null; // set when scope is "company"
 jobs_found: number;
 error: string | null;
 ```
@@ -276,6 +278,7 @@ from a quiet day.
 id: string;
 run_id: string; // FK -> Runs.id
 company_id: string; // FK -> Companies.id
+company_name: string; // stored name; survives the Company being deleted
 status: "ok" | "failed" | "skipped";
 jobs_found: number;
 error: string | null;
@@ -360,7 +363,7 @@ location?: string;
 | `GET`    | `/jobs`                       | one page of jobs (`limit`, `cursor`); `X-Next-Cursor` while more remain; first page also sends `X-Total-Count` |
 | `GET`    | `/config`                     | fetch configuration                                      |
 | `PUT`    | `/config`                     | modify configuration                                     |
-| `POST`   | `/runs`                       | trigger a run now (manual)                               |
+| `POST`   | `/runs`                       | trigger a run now (manual); optional `{ company_id }` for a Single-company run (404 / 409 paused / 409 run in progress) |
 | `GET`    | `/runs`                       | run history for the dashboard                            |
 | `GET`    | `/runs/{id}/companies`        | per-company breakdown for one run (`RunCompanyResult`)   |
 

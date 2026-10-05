@@ -36,6 +36,16 @@ function Card({ kicker, value, detail }: { kicker: string; value: string; detail
   );
 }
 
+/** The Company a Single-company run was for, from its breakdown row (kept after the Company is deleted). */
+function singleCompanyName(
+  run: Run,
+  breakdown: Breakdown | undefined,
+  companies: Map<string, Company>,
+): string | undefined {
+  const row = breakdown?.results?.find((r) => r.company_id === run.company_id);
+  return row?.company_name || (run.company_id ? companies.get(run.company_id)?.name : undefined);
+}
+
 function RunResult({ run }: { run: Run }) {
   const [dot, label] =
     run.status === "running"
@@ -81,7 +91,11 @@ export function RunsScreen() {
   const selected = runs.find((r) => r.id === selectedId) ?? latest;
 
   // The latest run's breakdown feeds the "Need attention" card, so load it too.
-  const wanted = [...new Set([latest?.id, selected?.id])].filter((id) => id !== undefined).join(",");
+  // Single-company runs are named from their breakdown row, so those load too.
+  const singleIds = runs.filter((r) => r.scope === "company").map((r) => r.id);
+  const wanted = [...new Set([latest?.id, selected?.id, ...singleIds])]
+    .filter((id) => id !== undefined)
+    .join(",");
   const requested = useRef(new Set<string>());
 
   useEffect(() => {
@@ -254,6 +268,17 @@ export function RunsScreen() {
                         </td>
                         <td className="px-4 py-3 text-muted">
                           {run.trigger === "cron" ? "Scheduled" : "Manual"}
+                          {run.scope === "company" && (
+                            <span className="mt-1 flex items-center gap-2">
+                              <span className="rounded-sm bg-surface px-1.5 py-0.5 text-xs font-semibold text-foreground">
+                                Single company
+                              </span>
+                              <span className="text-foreground">
+                                {singleCompanyName(run, breakdowns[run.id], companies) ??
+                                  (breakdowns[run.id]?.error ? "Unknown company" : "…")}
+                              </span>
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           {run.status === "running" ? "—" : run.jobs_found.toLocaleString("en-GB")}

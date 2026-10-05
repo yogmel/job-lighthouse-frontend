@@ -459,3 +459,65 @@ describe("CompaniesScreen · pause and remove", () => {
     expect(screen.getByRole("link", { name: "View jobs" })).toHaveAttribute("href", "/jobs");
   });
 });
+
+describe("CompaniesScreen Run now", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const started = {
+    id: "r9",
+    user_id: "u1",
+    started_at: "2026-10-02T08:00:00Z",
+    finished_at: null,
+    status: "running",
+    trigger: "manual",
+    scope: "company",
+    company_id: "c1",
+    jobs_found: 0,
+    error: null,
+  };
+
+  async function openMenu(name: string) {
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: `Actions for ${name}` }));
+    return user;
+  }
+
+  it("offers Run now for active companies only", async () => {
+    mockApi([HALDEN, NORTHSTAR]);
+    render(<CompaniesScreen />);
+
+    await openMenu("Halden");
+    expect(screen.getByRole("menuitem", { name: "Run now" })).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Actions for Northstar" }));
+    expect(within(screen.getByRole("menu", { name: "Northstar" })).queryByRole("menuitem", { name: "Run now" })).not.toBeInTheDocument();
+  });
+
+  it("posts the company id and confirms the start", async () => {
+    const spy = mockApi([HALDEN], { "POST /runs": () => json(202, started) });
+    render(<CompaniesScreen />);
+
+    const user = await openMenu("Halden");
+    await user.click(screen.getByRole("menuitem", { name: "Run now" }));
+
+    expect(await screen.findByText("Run started for Halden.")).toBeInTheDocument();
+    expect(sentBody(spy, "POST /runs")).toEqual({ company_id: "c1" });
+  });
+
+  it.each([
+    [409, "Company is paused"],
+    [409, "A run is already in progress"],
+    [404, "Company not found"],
+  ])("shows the %i message: %s", async (status, detail) => {
+    mockApi([HALDEN], { "POST /runs": () => json(status, { detail }) });
+    render(<CompaniesScreen />);
+
+    const user = await openMenu("Halden");
+    await user.click(screen.getByRole("menuitem", { name: "Run now" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(detail);
+  });
+});

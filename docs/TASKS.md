@@ -1230,7 +1230,7 @@ FE-019. Issue: job-lighthouse-frontend#45.
       first page)
 - [x] Nothing breaks if the header is missing (no total shown)
 
-### FE-022 · Run this company button and scope in run history
+### ~~FE-022 · Run this company button and scope in run history~~
 
 **Target:** frontend **Version:** v1.1
 
@@ -1239,5 +1239,9 @@ Company name. Blocked by BE-058. Issue: job-lighthouse-frontend#46.
 
 **Acceptance criteria:**
 
-- 404 / 409 messages shown
-- Single-company runs shown distinctly, including for Deleted companies
+- [x] "Run now" in the companies row menu (active Companies only) calls
+      `POST /runs` with `{ company_id }`
+- [x] 404 / 409 (paused, run in progress) messages shown
+- [x] Run history marks Single-company runs and names the Company from the
+      breakdown row (`RunCompanyResult.company_name`)
+- [x] Single-company runs shown for Deleted companies, using the stored name
