@@ -109,6 +109,16 @@ describe("CompaniesScreen", () => {
     expect(spy.mock.calls[0][0]).toBe("http://api.test/companies");
   });
 
+  it("scrolls the table in its own box with a sticky header", async () => {
+    mockFetch(200, [HALDEN, NORTHSTAR]);
+    render(<CompaniesScreen />);
+
+    const box = await screen.findByTestId("companies-scroll");
+
+    expect(box).toHaveClass("overflow-auto");
+    expect(within(box).getByRole("table").querySelector("thead")).toHaveClass("sticky");
+  });
+
   it("shows an empty state when there are no companies", async () => {
     mockFetch(200, []);
     render(<CompaniesScreen />);
