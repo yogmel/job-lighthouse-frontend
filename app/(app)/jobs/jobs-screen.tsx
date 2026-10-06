@@ -196,38 +196,44 @@ export function JobsScreen() {
         ) : (
           <>
             <JobFilters filters={filters} companies={state.companies} onChange={setFilters} />
-            {visible.length === 0 ? (
-              <div className="rounded-md border border-dashed border-divider px-6 py-12 text-center">
-                <h2 className="font-heading text-xl">No jobs match these filters</h2>
-                {/* Default filters already: only closed jobs exist, so offer those. */}
+            {/* The list scrolls here, not the page: tier headings stay pinned and Load more sits at the bottom. */}
+            <div
+              data-testid="jobs-scroll"
+              className="flex max-h-[70dvh] flex-col gap-4 overflow-y-auto overscroll-contain"
+            >
+              {visible.length === 0 ? (
+                <div className="rounded-md border border-dashed border-divider px-6 py-12 text-center">
+                  <h2 className="font-heading text-xl">No jobs match these filters</h2>
+                  {/* Default filters already: only closed jobs exist, so offer those. */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFilters(isDefault(filters) ? { ...filters, active: "all" } : DEFAULT_FILTERS)
+                    }
+                    className="mt-3 text-sm font-semibold text-accent-strong hover:underline"
+                  >
+                    {isDefault(filters) ? "Show closed jobs" : "Clear filters"}
+                  </button>
+                </div>
+              ) : (
+                <JobsList jobs={visible} />
+              )}
+              {moreError && (
+                <p role="alert" className="text-sm text-danger">
+                  {moreError}
+                </p>
+              )}
+              {nextCursor && (
                 <button
                   type="button"
-                  onClick={() =>
-                    setFilters(isDefault(filters) ? { ...filters, active: "all" } : DEFAULT_FILTERS)
-                  }
-                  className="mt-3 text-sm font-semibold text-accent-strong hover:underline"
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="self-center rounded-md border border-divider px-4 py-2 text-sm font-semibold hover:border-accent disabled:opacity-60"
                 >
-                  {isDefault(filters) ? "Show closed jobs" : "Clear filters"}
+                  {loadingMore ? "Loading…" : "Load more"}
                 </button>
-              </div>
-            ) : (
-              <JobsList jobs={visible} />
-            )}
-            {moreError && (
-              <p role="alert" className="text-sm text-danger">
-                {moreError}
-              </p>
-            )}
-            {nextCursor && (
-              <button
-                type="button"
-                onClick={loadMore}
-                disabled={loadingMore}
-                className="self-center rounded-md border border-divider px-4 py-2 text-sm font-semibold hover:border-accent disabled:opacity-60"
-              >
-                {loadingMore ? "Loading…" : "Load more"}
-              </button>
-            )}
+              )}
+            </div>
           </>
         ))}
     </>

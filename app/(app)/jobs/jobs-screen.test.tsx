@@ -280,6 +280,17 @@ describe("JobsScreen · paging", () => {
     expect(jobRequests(spy)).toEqual(["/jobs", "/jobs?cursor=c1"]);
   });
 
+  it("keeps the job list and Load more inside one scroll box", async () => {
+    mockPages({ "": { jobs: [FRONTEND], next: "c1" } }, [HALDEN, NORTHSTAR]);
+    render(<JobsScreen />);
+
+    const box = await screen.findByTestId("jobs-scroll");
+
+    expect(box).toHaveClass("overflow-y-auto");
+    expect(within(box).getByText("Frontend Engineer")).toBeInTheDocument();
+    expect(within(box).getByRole("button", { name: "Load more" })).toBeInTheDocument();
+  });
+
   it("stops offering more once the header is absent", async () => {
     const spy = mockPages({ "": { jobs: [FRONTEND], next: "c1" }, c1: { jobs: [PLATFORM] } }, [
       HALDEN,
