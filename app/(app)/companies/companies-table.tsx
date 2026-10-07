@@ -52,10 +52,13 @@ type Props = {
 
 export function CompaniesTable({ companies, menuItems }: Props) {
   return (
-    // No overflow clipping here: it would cut off the row menus.
-    <div className="rounded-md border border-divider">
+    // Scrolls inside the box; the row menu is fixed-positioned so this overflow doesn't clip it.
+    <div
+      data-testid="companies-scroll"
+      className="max-h-[70dvh] overflow-auto overscroll-contain rounded-md border border-divider"
+    >
       <table className="w-full text-left text-sm">
-        <thead className="bg-surface text-xs text-muted">
+        <thead className="sticky top-0 z-10 bg-surface text-xs text-muted shadow-[0_1px_0_var(--color-divider)]">
           <tr>
             <th scope="col" className="px-4 py-2.5 font-medium">Name</th>
             <th scope="col" className="px-4 py-2.5 font-medium">Tier</th>
