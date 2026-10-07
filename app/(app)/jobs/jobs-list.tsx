@@ -41,7 +41,7 @@ export function JobsList({ jobs }: Props) {
         const heading = tier === undefined ? "No tier" : `Tier ${tier}`;
         return (
           <section key={heading} aria-label={heading} className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold text-muted">
+            <h2 className="sticky top-0 z-10 border-b border-divider bg-background py-2 text-sm font-semibold text-muted">
               {heading} · {rows.length} {rows.length === 1 ? "job" : "jobs"}
             </h2>
             <ul className="divide-y divide-divider rounded-md border border-divider">
