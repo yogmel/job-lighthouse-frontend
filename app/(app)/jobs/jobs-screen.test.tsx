@@ -78,6 +78,13 @@ function json(status: number, body: unknown): Response {
   });
 }
 
+type User = ReturnType<typeof userEvent.setup>;
+
+async function pickCompany(user: User, combobox: HTMLElement, name: string) {
+  await user.click(combobox);
+  await user.click(within(screen.getByRole("listbox")).getByRole("option", { name }));
+}
+
 /** Answers calls by "METHOD /path"; `GET /jobs` may return a new list per call. */
 function mockApi(
   jobs: Job[] | (() => Job[]),
@@ -190,10 +197,58 @@ describe("JobsScreen", () => {
     const user = userEvent.setup();
     render(<JobsScreen />);
 
-    await user.selectOptions(await screen.findByLabelText("Company"), "Northstar");
+    await pickCompany(user, await screen.findByLabelText("Company"), "Northstar");
 
     expect(screen.getByText("Platform Engineer")).toBeInTheDocument();
     expect(screen.queryByText("Frontend Engineer")).not.toBeInTheDocument();
+  });
+
+  it("narrows the company list as you type, case-insensitively, anywhere in the name", async () => {
+    mockApi([FRONTEND, PLATFORM], [HALDEN, NORTHSTAR]);
+    const user = userEvent.setup();
+    render(<JobsScreen />);
+
+    await user.type(await screen.findByRole("combobox", { name: "Company" }), "THS");
+
+    const options = within(screen.getByRole("listbox")).getAllByRole("option").map((o) => o.textContent);
+    expect(options).toEqual(["All companies", "Northstar"]);
+  });
+
+  it("keeps All companies first and selectable", async () => {
+    mockApi([FRONTEND, PLATFORM], [HALDEN, NORTHSTAR]);
+    const user = userEvent.setup();
+    render(<JobsScreen />);
+    const box = await screen.findByRole("combobox", { name: "Company" });
+
+    await pickCompany(user, box, "Northstar");
+    expect(screen.queryByText("Frontend Engineer")).not.toBeInTheDocument();
+    await user.click(box);
+    const all = within(screen.getByRole("listbox")).getAllByRole("option")[0];
+    expect(all).toHaveTextContent("All companies");
+    await user.click(all);
+
+    expect(screen.getByText("Frontend Engineer")).toBeInTheDocument();
+  });
+
+  it("supports the keyboard: arrows move, Enter selects, Esc closes", async () => {
+    mockApi([FRONTEND, PLATFORM], [HALDEN, NORTHSTAR]);
+    const user = userEvent.setup();
+    render(<JobsScreen />);
+    const box = await screen.findByRole("combobox", { name: "Company" });
+
+    await user.click(box);
+    expect(box).toHaveAttribute("aria-expanded", "true");
+    await user.keyboard("{Escape}");
+    expect(box).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+
+    await user.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}");
+    expect(box).toHaveAttribute("aria-activedescendant", within(screen.getByRole("listbox")).getAllByRole("option")[2].id);
+    await user.keyboard("{Enter}");
+
+    expect(box).toHaveValue("Northstar");
+    expect(screen.queryByText("Frontend Engineer")).not.toBeInTheDocument();
+    expect(screen.getByText("Platform Engineer")).toBeInTheDocument();
   });
 
   it("filters by tier, resolved through the job's current company", async () => {
@@ -365,7 +420,7 @@ describe("JobsScreen · paging", () => {
     render(<JobsScreen />);
     await screen.findByText("Frontend Engineer");
 
-    await user.selectOptions(screen.getByLabelText("Company"), "Northstar");
+    await pickCompany(user, screen.getByLabelText("Company"), "Northstar");
     expect(screen.getByRole("button", { name: "Load more" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Load more" }));
 
@@ -433,7 +488,7 @@ describe("JobsScreen · total", () => {
     render(<JobsScreen />);
     await screen.findByText("2 of 2 jobs");
 
-    await user.selectOptions(screen.getByLabelText("Company"), "c1");
+    await pickCompany(user, screen.getByLabelText("Company"), "Northstar");
 
     expect(screen.getByText("2 of 2 jobs")).toBeInTheDocument();
   });

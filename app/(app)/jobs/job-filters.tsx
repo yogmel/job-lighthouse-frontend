@@ -1,4 +1,5 @@
 import type { Company } from "@/lib/api/companies";
+import { CompanyCombobox } from "./company-combobox";
 
 export type ActiveFilter = "active" | "closed" | "all";
 
@@ -23,7 +24,6 @@ const selectClass =
   "rounded-md border border-divider bg-field px-3 py-2 text-sm outline-none focus:border-accent";
 
 export function JobFilters({ filters, companies, onChange }: Props) {
-  const byName = [...companies].sort((a, b) => a.name.localeCompare(b.name));
   const tiers = [...new Set(companies.map((c) => c.tier))].sort((a, b) => a - b);
 
   return (
@@ -40,21 +40,13 @@ export function JobFilters({ filters, companies, onChange }: Props) {
           <option value="all">All</option>
         </select>
       </label>
-      <label className="flex flex-col gap-1.5 text-sm font-medium">
-        Company
-        <select
-          value={filters.companyId}
-          onChange={(e) => onChange({ ...filters, companyId: e.target.value })}
-          className={selectClass}
-        >
-          <option value="">All companies</option>
-          {byName.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <CompanyCombobox
+        label="Company"
+        value={filters.companyId}
+        companies={companies}
+        onChange={(companyId) => onChange({ ...filters, companyId })}
+        className={selectClass}
+      />
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         Tier
         <select
