@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Company } from "@/lib/api/companies";
+import { RunProvider } from "../run-context";
 import { CompaniesScreen } from "./companies-screen";
 
 // The real router keeps useSearchParams in sync with history.replaceState; here it reads the jsdom URL.
@@ -848,6 +849,36 @@ describe("CompaniesScreen filters", () => {
     expect(names()).toEqual(["Halden", "Northstar", "Orbit", "Lumen"]);
     expect(screen.getByLabelText("Tier")).toHaveValue("");
     expect(window.location.search).toBe("?added=x");
+  });
+
+  it("reloads the last run after a run started here finishes", async () => {
+    let runs = [fullRun];
+    const spy = mockApi(ALL, {
+      "GET /runs": () => json(200, runs),
+      "GET /runs/r1/companies": () => json(200, results),
+      "GET /runs/r2/companies": () =>
+        json(200, [{ ...results[1], run_id: "r2", status: "ok", jobs_found: 3 }]),
+      "POST /runs": () => {
+        // Kept simple: the refetched history has a newer Full run with Lumen now ok.
+        runs = [{ ...fullRun, id: "r2", started_at: "2026-10-03T07:00:00Z" }, fullRun];
+        return json(200, { ...fullRun, id: "r2", scope: "company", company_id: "c4" });
+      },
+    });
+    window.history.replaceState(null, "", "/companies?last_run=failed");
+    const user = userEvent.setup();
+    render(
+      <RunProvider>
+        <CompaniesScreen />
+      </RunProvider>,
+    );
+    expect(await screen.findByRole("table")).toBeInTheDocument();
+    expect(names()).toEqual(["Lumen"]);
+
+    await user.click(screen.getByRole("button", { name: "Actions for Lumen" }));
+    await user.click(screen.getByRole("menuitem", { name: "Run now" }));
+
+    expect(await screen.findByText("No companies match these filters")).toBeInTheDocument();
+    expect(spy.mock.calls.filter(([input]) => String(input).endsWith("/runs/r2/companies"))).toHaveLength(1);
   });
 
   it("says so when the last run can't be loaded", async () => {

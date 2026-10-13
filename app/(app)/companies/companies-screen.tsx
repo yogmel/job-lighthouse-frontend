@@ -100,7 +100,7 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
   const [banner, setBanner] = useState<string | undefined>(justAdded && addedBanner(justAdded));
   const [actionError, setActionError] = useState<string>();
   const [runningId, setRunningId] = useState<string>();
-  const { trigger } = useRuns();
+  const { trigger, triggered } = useRuns();
   const dismissBanner = useCallback(() => setBanner(undefined), []);
   const [lastRun, setLastRun] = useState<LastRun>({ status: "loading" });
 
@@ -133,6 +133,8 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
     };
   }, []);
 
+  // A run started on this visit that finished right away can change the outcomes.
+  const finishedRun = triggered?.status === "running" ? undefined : triggered?.id;
   useEffect(() => {
     let cancelled = false;
     loadLastRun().then(
@@ -142,7 +144,7 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [finishedRun]);
 
   /** The company is already gone on the server: reload the list to match. */
   async function onGone(company: Company) {
