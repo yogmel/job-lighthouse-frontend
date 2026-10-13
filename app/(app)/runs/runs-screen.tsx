@@ -261,7 +261,7 @@ export function RunsScreen() {
                             type="button"
                             onClick={() => setSelectedId(run.id)}
                             aria-pressed={isSelected}
-                            className="font-semibold underline-offset-2 hover:underline"
+                            className="rounded-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                           >
                             {startedLabel(run.started_at, now)}
                           </button>
