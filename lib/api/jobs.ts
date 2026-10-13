@@ -32,14 +32,26 @@ export type JobsPage = {
   total: number | null;
 };
 
+export type JobsQuery = {
+  companyId?: string;
+  tier?: number;
+  /** true = open, false = closed, undefined = all. */
+  active?: boolean;
+};
+
 /**
  * Fetches one page of jobs (newest first); pass the previous page's
- * `nextCursor` to continue. The board filters in the browser, so the cursor
- * walks the unfiltered list.
+ * `nextCursor` to continue. The server applies the filters, so the cursor
+ * walks the filtered list and `total` counts it.
  */
-export async function listJobs(cursor?: string | null): Promise<JobsPage> {
-  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
-  const { data, headers } = await apiFetchWithHeaders<Job[]>(`/jobs${query}`);
+export async function listJobs(query: JobsQuery = {}, cursor?: string | null): Promise<JobsPage> {
+  const params = new URLSearchParams();
+  if (query.companyId) params.set("company_id", query.companyId);
+  if (query.tier !== undefined) params.set("tier", String(query.tier));
+  if (query.active !== undefined) params.set("active", String(query.active));
+  if (cursor) params.set("cursor", cursor);
+  const qs = params.toString();
+  const { data, headers } = await apiFetchWithHeaders<Job[]>(`/jobs${qs ? `?${qs}` : ""}`);
   const total = Number.parseInt(headers.get("X-Total-Count") ?? "", 10);
   return {
     jobs: data,

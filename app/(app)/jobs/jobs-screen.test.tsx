@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Company } from "@/lib/api/companies";
 import type { Job } from "@/lib/api/jobs";
 import type { Run } from "@/lib/api/runs";
@@ -78,11 +78,54 @@ function json(status: number, body: unknown): Response {
   });
 }
 
+/** An in-memory URL standing in for the App Router. */
+const nav = vi.hoisted(() => {
+  const listeners = new Set<() => void>();
+  return {
+    search: "",
+    listeners,
+    replace(url: string) {
+      nav.search = url.includes("?") ? url.slice(url.indexOf("?") + 1) : "";
+      listeners.forEach((l) => l());
+    },
+  };
+});
+
+vi.mock("next/navigation", async () => {
+  const { useSyncExternalStore } = await import("react");
+  const subscribe = (l: () => void) => {
+    nav.listeners.add(l);
+    return () => nav.listeners.delete(l);
+  };
+  return {
+    usePathname: () => "/jobs",
+    useRouter: () => ({ replace: nav.replace }),
+    useSearchParams: () => new URLSearchParams(useSyncExternalStore(subscribe, () => nav.search)),
+  };
+});
+
+beforeEach(() => {
+  nav.search = "";
+});
+
 type User = ReturnType<typeof userEvent.setup>;
 
 async function pickCompany(user: User, combobox: HTMLElement, name: string) {
   await user.click(combobox);
   await user.click(within(screen.getByRole("listbox")).getByRole("option", { name }));
+}
+
+/** What `GET /jobs` does with `company_id`, `tier` and `active`. */
+function serverFilter(jobs: Job[], companies: Company[], path: string): Job[] {
+  const q = new URL(path, "http://api.test").searchParams;
+  return jobs.filter((j) => {
+    if (q.has("company_id") && j.company_id !== q.get("company_id")) return false;
+    if (q.has("tier") && String(companies.find((c) => c.id === j.company_id)?.tier) !== q.get("tier")) {
+      return false;
+    }
+    if (q.has("active") && String(j.active) !== q.get("active")) return false;
+    return true;
+  });
 }
 
 /** Answers calls by "METHOD /path"; `GET /jobs` may return a new list per call. */
@@ -94,7 +137,9 @@ function mockApi(
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const path = String(input).replace("http://api.test", "");
     const key = `${init?.method ?? "GET"} ${path}`;
-    if (key === "GET /jobs") return json(200, typeof jobs === "function" ? jobs() : jobs);
+    if (path.split("?")[0] === "GET /jobs".slice(4) && !init?.method) {
+      return json(200, serverFilter(typeof jobs === "function" ? jobs() : jobs, companies, path));
+    }
     if (key === "GET /companies") return json(200, companies);
     const route = routes[key];
     if (!route) throw new Error(`Unexpected request: ${key}`);
@@ -139,9 +184,11 @@ function jobRequests(spy: ReturnType<typeof mockApi>): string[] {
     .filter((path) => path.startsWith("/jobs"));
 }
 
+/** Counts calls to "METHOD /path", ignoring the query string. */
 function calls(spy: ReturnType<typeof mockApi>, key: string): number {
   return spy.mock.calls.filter(
-    ([input, init]) => `${init?.method ?? "GET"} ${String(input).replace("http://api.test", "")}` === key,
+    ([input, init]) =>
+      `${init?.method ?? "GET"} ${String(input).replace("http://api.test", "").split("?")[0]}` === key,
   ).length;
 }
 
@@ -292,11 +339,12 @@ describe("JobsScreen", () => {
   });
 
   it("shows a first-run empty state when there are no jobs at all", async () => {
+    nav.search = "status=all";
     mockApi([], [HALDEN]);
     render(<JobsScreen />);
 
     expect(await screen.findByText("No jobs yet")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Status")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Status")).toHaveValue("all");
   });
 
   it("does not link out to non-http job URLs", async () => {
@@ -332,7 +380,7 @@ describe("JobsScreen · paging", () => {
 
     expect(await screen.findByText("Platform Engineer")).toBeInTheDocument();
     expect(screen.getByText("Frontend Engineer")).toBeInTheDocument();
-    expect(jobRequests(spy)).toEqual(["/jobs", "/jobs?cursor=c1"]);
+    expect(jobRequests(spy)).toEqual(["/jobs?active=true", "/jobs?active=true&cursor=c1"]);
   });
 
   it("keeps the job list and Load more inside one scroll box", async () => {
@@ -411,21 +459,25 @@ describe("JobsScreen · paging", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("keeps the loaded pages and cursor when filters change", async () => {
+  it("starts over from the first page when filters change", async () => {
     const spy = mockPages({ "": { jobs: [FRONTEND], next: "c1" }, c1: { jobs: [PLATFORM] } }, [
       HALDEN,
       NORTHSTAR,
     ]);
     const user = userEvent.setup();
     render(<JobsScreen />);
-    await screen.findByText("Frontend Engineer");
+    await user.click(await screen.findByRole("button", { name: "Load more" }));
+    await screen.findByText("Platform Engineer");
 
     await pickCompany(user, screen.getByLabelText("Company"), "Northstar");
-    expect(screen.getByRole("button", { name: "Load more" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Load more" }));
 
-    expect(await screen.findByText("Platform Engineer")).toBeInTheDocument();
-    expect(jobRequests(spy)).toEqual(["/jobs", "/jobs?cursor=c1"]);
+    await vi.waitFor(() =>
+      expect(jobRequests(spy)).toEqual([
+        "/jobs?active=true",
+        "/jobs?active=true&cursor=c1",
+        "/jobs?company_id=c2&active=true",
+      ]),
+    );
   });
 });
 
@@ -482,15 +534,23 @@ describe("JobsScreen · total", () => {
     expect(await screen.findByText("1 of 313 jobs")).toBeInTheDocument();
   });
 
-  it("keeps the total when filters change (filtering is client-side)", async () => {
-    mockPages({ "": { jobs: [FRONTEND, PLATFORM], total: 2 } }, [HALDEN, NORTHSTAR]);
+  it("shows the filtered total after a filter change", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/companies") return json(200, [HALDEN, NORTHSTAR]);
+      const filtered = url.searchParams.has("company_id");
+      return new Response(JSON.stringify(filtered ? [PLATFORM] : [FRONTEND, PLATFORM]), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "X-Total-Count": filtered ? "1" : "2" },
+      });
+    });
     const user = userEvent.setup();
     render(<JobsScreen />);
     await screen.findByText("2 of 2 jobs");
 
     await pickCompany(user, screen.getByLabelText("Company"), "Northstar");
 
-    expect(screen.getByText("2 of 2 jobs")).toBeInTheDocument();
+    expect(await screen.findByText("1 of 1 jobs")).toBeInTheDocument();
   });
 
   it.each([["missing", undefined], ["not a number", "lots"]])(
@@ -597,5 +657,111 @@ describe("JobsScreen · runs", () => {
 
     await vi.waitFor(() => expect(calls(spy, "POST /runs")).toBe(1));
     expect(calls(spy, "GET /jobs")).toBe(1);
+  });
+});
+
+describe("JobsScreen · server-side filters", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("asks the server for open jobs by default", async () => {
+    const spy = mockApi([FRONTEND], [HALDEN]);
+    render(<JobsScreen />);
+    await screen.findByText("Frontend Engineer");
+
+    expect(jobRequests(spy)).toEqual(["/jobs?active=true"]);
+  });
+
+  it("sends company, tier and status as params and writes them to the URL", async () => {
+    const spy = mockApi([FRONTEND, PLATFORM, CLOSED], [HALDEN, NORTHSTAR]);
+    const user = userEvent.setup();
+    render(<JobsScreen />);
+
+    await user.selectOptions(await screen.findByLabelText("Status"), "closed");
+    await user.selectOptions(screen.getByLabelText("Tier"), "Tier 1");
+    await pickCompany(user, screen.getByLabelText("Company"), "Halden");
+
+    expect(await screen.findByText("Data Engineer")).toBeInTheDocument();
+    expect(jobRequests(spy).at(-1)).toBe("/jobs?company_id=c1&tier=1&active=false");
+    expect(new URLSearchParams(nav.search).toString()).toBe("status=closed&company=c1&tier=1");
+  });
+
+  it("omits active for All and keeps the URL clean for the default view", async () => {
+    const spy = mockApi([FRONTEND, CLOSED], [HALDEN]);
+    const user = userEvent.setup();
+    render(<JobsScreen />);
+
+    await user.selectOptions(await screen.findByLabelText("Status"), "all");
+    expect(await screen.findByText("Data Engineer")).toBeInTheDocument();
+    expect(jobRequests(spy).at(-1)).toBe("/jobs");
+    expect(nav.search).toBe("status=all");
+
+    await user.selectOptions(screen.getByLabelText("Status"), "active");
+    await vi.waitFor(() => expect(nav.search).toBe(""));
+  });
+
+  it("reads the filters from the URL on load", async () => {
+    nav.search = "status=closed&company=c1&tier=1";
+    const spy = mockApi([FRONTEND, CLOSED], [HALDEN, NORTHSTAR]);
+    render(<JobsScreen />);
+
+    expect(await screen.findByText("Data Engineer")).toBeInTheDocument();
+    expect(jobRequests(spy)).toEqual(["/jobs?company_id=c1&tier=1&active=false"]);
+    expect(screen.getByLabelText("Status")).toHaveValue("closed");
+    expect(screen.getByLabelText("Tier")).toHaveValue("1");
+    expect(screen.getByRole("combobox", { name: "Company" })).toHaveValue("Halden");
+  });
+
+  it("falls back to the defaults for unknown or malformed URL values", async () => {
+    nav.search = "status=nope&tier=abc";
+    const spy = mockApi([FRONTEND], [HALDEN]);
+    render(<JobsScreen />);
+    await screen.findByText("Frontend Engineer");
+
+    expect(jobRequests(spy)).toEqual(["/jobs?active=true"]);
+  });
+
+  it("never lets a slow response for old filters overwrite a newer one", async () => {
+    const resolvers: Record<string, () => void> = {};
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/companies") return json(200, [HALDEN, NORTHSTAR]);
+      const mine = url.searchParams.get("company_id") === "c2" ? [PLATFORM] : [FRONTEND];
+      if (url.searchParams.get("company_id") === "c2") return json(200, mine);
+      // The first, unfiltered request answers only when released.
+      await new Promise<void>((resolve) => (resolvers.first = resolve));
+      return json(200, mine);
+    });
+    const user = userEvent.setup();
+    render(<JobsScreen />);
+    await vi.waitFor(() => expect(resolvers.first).toBeDefined());
+
+    nav.replace("/jobs?company=c2");
+    expect(await screen.findByText("Platform Engineer")).toBeInTheDocument();
+    resolvers.first();
+    await user.click(document.body);
+
+    await vi.waitFor(() => expect(screen.queryByText("Frontend Engineer")).not.toBeInTheDocument());
+    expect(screen.getByText("Platform Engineer")).toBeInTheDocument();
+  });
+
+  it("shows an alert and keeps the filters when a filtered fetch fails", async () => {
+    let fail = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/companies") return json(200, [HALDEN, NORTHSTAR]);
+      if (fail) throw new TypeError("Failed to fetch");
+      return json(200, [FRONTEND]);
+    });
+    const user = userEvent.setup();
+    render(<JobsScreen />);
+    await screen.findByText("Frontend Engineer");
+
+    fail = true;
+    await user.selectOptions(screen.getByLabelText("Tier"), "Tier 3");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/can't reach the server/i);
+    expect(screen.getByLabelText("Tier")).toHaveValue("3");
   });
 });

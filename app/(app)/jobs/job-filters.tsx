@@ -1,4 +1,5 @@
 import type { Company } from "@/lib/api/companies";
+import type { JobsQuery } from "@/lib/api/jobs";
 import { CompanyCombobox } from "./company-combobox";
 
 export type ActiveFilter = "active" | "closed" | "all";
@@ -13,6 +14,37 @@ export type Filters = {
 
 /** Inactive jobs are history, hidden from the default view. */
 export const DEFAULT_FILTERS: Filters = { active: "active", companyId: "", tier: "" };
+
+const ACTIVE_VALUES: ActiveFilter[] = ["active", "closed", "all"];
+
+/** Reads filters from the URL; unknown or malformed values fall back to the default. */
+export function filtersFromParams(params: URLSearchParams): Filters {
+  const status = params.get("status") as ActiveFilter;
+  const tier = params.get("tier") ?? "";
+  return {
+    active: ACTIVE_VALUES.includes(status) ? status : DEFAULT_FILTERS.active,
+    companyId: params.get("company") ?? "",
+    tier: /^\d+$/.test(tier) ? tier : "",
+  };
+}
+
+/** Writes only non-default filters, so the default view has a clean URL. */
+export function filtersToParams(filters: Filters): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filters.active !== DEFAULT_FILTERS.active) params.set("status", filters.active);
+  if (filters.companyId) params.set("company", filters.companyId);
+  if (filters.tier) params.set("tier", filters.tier);
+  return params;
+}
+
+/** The `GET /jobs` params for a set of filters. */
+export function filtersToQuery({ active, companyId, tier }: Filters): JobsQuery {
+  return {
+    companyId: companyId || undefined,
+    tier: tier ? Number(tier) : undefined,
+    active: active === "all" ? undefined : active === "active",
+  };
+}
 
 type Props = {
   filters: Filters;
