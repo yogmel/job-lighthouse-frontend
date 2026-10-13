@@ -21,7 +21,7 @@ full target product. Versioning the build is a separate, later exercise.
 - Add companies to the pool
   - Add by job board (auto-detected)
   - Add by scraper (agent-discovered selectors, or a custom handler)
-- Check all tracking companies; edit, re-test, pause, or remove one
+- Check all tracking companies; edit, run now, pause, or remove one
 - Define a recurrent job watcher (schedule)
 - Add your PROFILE to enable agent match-making (`match_score`)
 - Add keywords (include/exclude) and location to filter out irrelevant positions
@@ -655,7 +655,7 @@ existing design prototype), grouped the same way:
 | ---------------------- | -------------------------------------------------------------------------------------------- |
 | 1 · Onboarding         | Sign up (email/password or Google) → Setup (empty/filled) → Jobs board, first run          |
 | 2 · Configuration      | Settings tabs: Filters, Schedule, Profile, Notifications, Account                          |
-| 3 · Edit a company     | Companies list → row menu (edit / re-test / pause / remove) → edit dialog → saved banner   |
+| 3 · Edit a company     | Companies list → row action icons (edit / run now / pause-resume / remove) → edit dialog → saved banner   |
 | 4 · Add a company      | Companies list → paste careers URL → agent resolving → confirm (sample scored jobs) → added banner |
 | 5 · Runs               | Run history: next run, today's totals, history, per-company breakdown                       |
 

@@ -1,6 +1,6 @@
 import type { Company, Source } from "@/lib/api/companies";
 import { nextSort, type CompanySort, type SortKey } from "./company-sort";
-import { RowMenu, type RowMenuItem } from "./row-menu";
+import { RowActions, type RowAction } from "./row-actions";
 
 const dateFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
 
@@ -18,7 +18,7 @@ export function needsCustomHandling(company: Company): boolean {
   return company.source.kind === "custom" && !company.active;
 }
 
-/** Paused rows fade their cells, not the row, so the "⋯" menu popover stays fully opaque. */
+/** Paused rows fade their cells, not the row, so the action icons stay fully opaque. */
 function dim(company: Company): string {
   return company.active ? "" : "opacity-60";
 }
@@ -84,13 +84,13 @@ type Props = {
   companies: Company[];
   sort: CompanySort;
   onSort: (sort: CompanySort) => void;
-  /** Row menu actions for one company. */
-  menuItems: (company: Company) => RowMenuItem[];
+  /** Row action icons for one company. */
+  rowActions: (company: Company) => RowAction[];
 };
 
-export function CompaniesTable({ companies, sort, onSort, menuItems }: Props) {
+export function CompaniesTable({ companies, sort, onSort, rowActions }: Props) {
   return (
-    // Scrolls inside the box; the row menu is fixed-positioned so this overflow doesn't clip it.
+    // Scrolls inside the box.
     <div
       data-testid="companies-scroll"
       className="max-h-[70dvh] overflow-auto overscroll-contain rounded-md border border-divider"
@@ -109,7 +109,7 @@ export function CompaniesTable({ companies, sort, onSort, menuItems }: Props) {
               className="hidden sm:table-cell"
             />
             <th scope="col" className="px-4 py-2.5 font-medium">Status</th>
-            <th scope="col" className="w-12 px-4 py-2.5">
+            <th scope="col" className="w-px px-4 py-2.5">
               <span className="sr-only">Actions</span>
             </th>
           </tr>
@@ -147,7 +147,7 @@ export function CompaniesTable({ companies, sort, onSort, menuItems }: Props) {
                 <Status company={company} />
               </td>
               <td className="px-4 py-3 text-right">
-                <RowMenu name={company.name} items={menuItems(company)} />
+                <RowActions actions={rowActions(company)} />
               </td>
             </tr>
           ))}
