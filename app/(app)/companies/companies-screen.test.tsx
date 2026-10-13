@@ -791,7 +791,7 @@ describe("CompaniesScreen filters", () => {
 
     await user.selectOptions(await screen.findByLabelText("Tier"), "2");
 
-    expect(names()).toEqual(["Orbit", "Lumen"]);
+    expect(names()).toEqual(["Lumen", "Orbit"]);
     expect(window.location.search).toBe("?tier=2");
   });
 
@@ -846,7 +846,7 @@ describe("CompaniesScreen filters", () => {
 
     await user.click(screen.getByRole("button", { name: "Clear filters" }));
 
-    expect(names()).toEqual(["Halden", "Northstar", "Orbit", "Lumen"]);
+    expect(names()).toEqual(["Halden", "Lumen", "Northstar", "Orbit"]);
     expect(screen.getByLabelText("Tier")).toHaveValue("");
     expect(window.location.search).toBe("?added=x");
   });
@@ -895,5 +895,69 @@ describe("CompaniesScreen filters", () => {
 
     expect(await screen.findByText("No companies yet")).toBeInTheDocument();
     expect(screen.queryByLabelText("Tier")).not.toBeInTheDocument();
+  });
+});
+
+describe("CompaniesScreen sorting", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    window.history.replaceState(null, "", "/companies");
+  });
+
+  // Listed out of order on purpose: the screen sorts them.
+  const LIST = [ORBIT, HALDEN, NORTHSTAR];
+
+  function names() {
+    const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);
+    return rows.map((row) => within(row).getAllByRole("cell")[0].textContent);
+  }
+
+  const header = (name: string) => screen.getByRole("columnheader", { name });
+
+  it("sorts by name A–Z by default", async () => {
+    mockApi(LIST);
+    render(<CompaniesScreen />);
+
+    await screen.findByRole("table");
+    expect(names()).toEqual(["Halden", "Northstar", "Orbit"]);
+    expect(header("Name")).toHaveAttribute("aria-sort", "ascending");
+    expect(header("Added")).not.toHaveAttribute("aria-sort");
+  });
+
+  it("sorts by a header and flips on the second click, keeping it in the URL", async () => {
+    mockApi(LIST);
+    const user = userEvent.setup();
+    render(<CompaniesScreen />);
+    await screen.findByRole("table");
+
+    await user.click(screen.getByRole("button", { name: "Added" }));
+    expect(names()).toEqual(["Orbit", "Northstar", "Halden"]);
+    expect(header("Added")).toHaveAttribute("aria-sort", "descending");
+    expect(header("Name")).not.toHaveAttribute("aria-sort");
+    expect(window.location.search).toBe("?sort=-added");
+
+    await user.click(screen.getByRole("button", { name: "Added" }));
+    expect(names()).toEqual(["Halden", "Northstar", "Orbit"]);
+    expect(header("Added")).toHaveAttribute("aria-sort", "ascending");
+    expect(window.location.search).toBe("?sort=added");
+
+    await user.click(screen.getByRole("button", { name: "Name" }));
+    await user.click(screen.getByRole("button", { name: "Name" }));
+    expect(names()).toEqual(["Orbit", "Northstar", "Halden"]);
+    expect(header("Name")).toHaveAttribute("aria-sort", "descending");
+    expect(window.location.search).toBe("?sort=-name");
+  });
+
+  it("reads the sort from the URL and keeps the filters beside it", async () => {
+    window.history.replaceState(null, "", "/companies?status=paused&sort=-name");
+    mockApi(LIST);
+    const user = userEvent.setup();
+    render(<CompaniesScreen />);
+
+    await screen.findByRole("table");
+    expect(names()).toEqual(["Orbit", "Northstar"]);
+
+    await user.click(screen.getByRole("button", { name: "Name" }));
+    expect(window.location.search).toBe("?status=paused");
   });
 });

@@ -28,6 +28,7 @@ import {
   type LastRunOutcome,
 } from "./company-filters";
 import type { CompanyDefaults } from "./company-fields";
+import { parseSort, sortCompanies, writeSort, type CompanySort } from "./company-sort";
 import { RemoveCompanyDialog } from "./remove-company-dialog";
 import type { RowMenuItem } from "./row-menu";
 
@@ -35,6 +36,13 @@ type State =
   | { status: "loading" }
   | { status: "error"; message: string }
   | { status: "ready"; companies: Company[] };
+
+/** What the URL holds: filters and sort. */
+type View = { filters: CompanyFilters; sort: CompanySort };
+
+function parseView(params: URLSearchParams): View {
+  return { filters: parseFilters(params), sort: parseSort(params) };
+}
 
 /** Each Company's outcome in the latest Full run, for the Last run filter. */
 type LastRun =
@@ -63,14 +71,20 @@ function summary(companies: Company[]): string {
 
 function FilteredTable({
   companies,
+  sort,
+  onSort,
   menuItems,
   onClear,
 }: {
   companies: Company[];
+  sort: CompanySort;
+  onSort: (sort: CompanySort) => void;
   menuItems: (company: Company) => RowMenuItem[];
   onClear: () => void;
 }) {
-  if (companies.length > 0) return <CompaniesTable companies={companies} menuItems={menuItems} />;
+  if (companies.length > 0) {
+    return <CompaniesTable companies={companies} sort={sort} onSort={onSort} menuItems={menuItems} />;
+  }
   return (
     <div className="rounded-md border border-dashed border-divider px-6 py-12 text-center">
       <h2 className="font-heading text-xl">No companies match these filters</h2>
@@ -104,23 +118,28 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
   const dismissBanner = useCallback(() => setBanner(undefined), []);
   const [lastRun, setLastRun] = useState<LastRun>({ status: "loading" });
 
-  // Filters live in the URL. Local state answers right away; it re-reads the
-  // URL whenever the query changes from outside (e.g. a link to /companies).
+  // Filters and sort live in the URL. Local state answers right away; it re-reads
+  // the URL whenever the query changes from outside (e.g. a link to /companies).
   const searchParams = useSearchParams();
   const query = searchParams.toString();
-  const [filters, setFilterState] = useState<CompanyFilters>(() => parseFilters(searchParams));
+  const [view, setViewState] = useState<View>(() => parseView(searchParams));
   const [readQuery, setReadQuery] = useState(query);
   if (query !== readQuery) {
     setReadQuery(query);
-    setFilterState(parseFilters(searchParams));
+    setViewState(parseView(searchParams));
   }
+  const { filters, sort } = view;
 
-  function setFilters(next: CompanyFilters) {
-    setFilterState(next);
+  function setView(next: View) {
+    setViewState(next);
     // Native history updates sync with useSearchParams without a server round trip.
-    const params = writeFilters(new URLSearchParams(window.location.search), next).toString();
+    const current = new URLSearchParams(window.location.search);
+    const params = writeSort(writeFilters(current, next.filters), next.sort).toString();
     window.history.replaceState(null, "", params ? `?${params}` : window.location.pathname);
   }
+
+  const setFilters = (next: CompanyFilters) => setView({ ...view, filters: next });
+  const setSort = (next: CompanySort) => setView({ ...view, sort: next });
 
   useEffect(() => {
     let cancelled = false;
@@ -320,9 +339,14 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
               <p className="text-sm text-muted">Loading last run…</p>
             ) : (
               <FilteredTable
-                companies={state.companies.filter((c) =>
-                  matchesFilters(c, filters, lastRun.status === "ready" ? lastRun.outcomes : undefined),
+                companies={sortCompanies(
+                  state.companies.filter((c) =>
+                    matchesFilters(c, filters, lastRun.status === "ready" ? lastRun.outcomes : undefined),
+                  ),
+                  sort,
                 )}
+                sort={sort}
+                onSort={setSort}
                 menuItems={menuItems}
                 onClear={() => setFilters(DEFAULT_FILTERS)}
               />
