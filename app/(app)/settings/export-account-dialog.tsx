@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal } from "@/app/(app)/modal";
 import { exportAccount } from "@/lib/api/account";
 import { toFormErrors } from "@/lib/api/errors";
@@ -18,14 +18,25 @@ function exportFilename(now = new Date()): string {
 export function ExportAccountDialog({ onClose }: Props) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
+  // Cancel / Esc while the request is pending: drop the response, download nothing.
+  const closed = useRef(false);
+  useEffect(() => {
+    closed.current = false;
+    return () => {
+      closed.current = true;
+    };
+  }, []);
 
   async function exportData() {
     setPending(true);
     setError(undefined);
     try {
-      downloadJson(await exportAccount(), exportFilename());
+      const data = await exportAccount();
+      if (closed.current) return;
+      downloadJson(data, exportFilename());
       onClose();
     } catch (err) {
+      if (closed.current) return;
       setError(toFormErrors(err, []).formError ?? "Something went wrong. Please try again.");
       setPending(false);
     }

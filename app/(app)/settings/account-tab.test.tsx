@@ -208,6 +208,22 @@ describe("AccountTab", () => {
     expect(dialog).toHaveTextContent(/JSON/);
   });
 
+  it("downloads nothing when cancelled while the export is pending", async () => {
+    let answer: (r: Response) => void = () => {};
+    mockApi(ACCOUNT, { "GET /account/export": () => new Promise<Response>((r) => (answer = r)) as never });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const user = userEvent.setup();
+    render(<AccountTab />);
+
+    await user.click(await screen.findByRole("button", { name: "Export" }));
+    await user.click(screen.getByRole("button", { name: "Export JSON" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    answer(json(200, {}));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(click).not.toHaveBeenCalled();
+  });
+
   it("downloads nothing on Cancel", async () => {
     const api = mockApi(ACCOUNT, { "GET /account/export": () => json(200, {}) });
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
