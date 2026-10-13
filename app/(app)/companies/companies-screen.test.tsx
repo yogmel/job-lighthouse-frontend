@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Company } from "@/lib/api/companies";
@@ -347,6 +347,127 @@ describe("CompaniesScreen · edit company", () => {
 
     await user.click(within(dialog).getByLabelText("Tier 1"));
     expect(within(dialog).queryByText(note)).not.toBeInTheDocument();
+  });
+
+  const BETTER_STACK: Company = {
+    ...NORTHSTAR,
+    id: "c9",
+    name: "Better Stack",
+    active: true,
+    source: {
+      kind: "scraper",
+      strategy: "static",
+      selectors: {
+        careers_url: "https://betterstack.example/careers",
+        job: ".card",
+        title: "@data-role-title",
+        link: "@data-role",
+        url_template: "{careers_url}#{link}",
+      },
+    },
+  };
+
+  it("keeps url_template and @attr selectors when saving unchanged", async () => {
+    const spy = mockApi([BETTER_STACK], {
+      "PUT /companies/c9": () => json(200, BETTER_STACK),
+    });
+    render(<CompaniesScreen />);
+
+    const { user, dialog } = await openEdit("Better Stack");
+    expect(within(dialog).getByLabelText(/URL template/)).toHaveValue(
+      "{careers_url}#{link}",
+    );
+    await user.click(
+      within(dialog).getByRole("button", { name: "Save changes" }),
+    );
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(
+      (sentBody(spy, "PUT /companies/c9") as { source: { selectors: unknown } })
+        .source.selectors,
+    ).toEqual(BETTER_STACK.source.kind === "scraper" && BETTER_STACK.source.selectors);
+  });
+
+  it("omits url_template when cleared", async () => {
+    const spy = mockApi([BETTER_STACK], {
+      "PUT /companies/c9": () => json(200, BETTER_STACK),
+    });
+    render(<CompaniesScreen />);
+
+    const { user, dialog } = await openEdit("Better Stack");
+    await user.clear(within(dialog).getByLabelText(/URL template/));
+    await user.click(
+      within(dialog).getByRole("button", { name: "Save changes" }),
+    );
+
+    await waitFor(() =>
+      expect(sentBody(spy, "PUT /companies/c9")).toBeDefined(),
+    );
+    const selectors = (
+      sentBody(spy, "PUT /companies/c9") as {
+        source: { selectors: Record<string, unknown> };
+      }
+    ).source.selectors;
+    expect(selectors).not.toHaveProperty("url_template");
+  });
+
+  it("blocks a url_template without {link}", async () => {
+    const spy = mockApi([BETTER_STACK], {
+      "PUT /companies/c9": () => json(200, BETTER_STACK),
+    });
+    render(<CompaniesScreen />);
+
+    const { user, dialog } = await openEdit("Better Stack");
+    const field = within(dialog).getByLabelText(/URL template/);
+    await user.clear(field);
+    await user.type(field, "{{careers_url}");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Save changes" }),
+    );
+
+    expect(field).toBeInvalid();
+    expect(sentBody(spy, "PUT /companies/c9")).toBeUndefined();
+  });
+
+  it("shows the attribute help under title, link and location", async () => {
+    mockApi([BETTER_STACK]);
+    render(<CompaniesScreen />);
+
+    const { dialog } = await openEdit("Better Stack");
+    expect(
+      within(dialog).getAllByText(/Append `@attr` to read an attribute/),
+    ).toHaveLength(3);
+  });
+
+  it("shows a 422 on url_template under its field", async () => {
+    mockApi([BETTER_STACK], {
+      "PUT /companies/c9": () =>
+        json(422, {
+          detail: [
+            {
+              loc: ["body", "source", "scraper", "selectors", "url_template"],
+              msg: "url_template must contain {link}",
+              type: "value_error",
+            },
+          ],
+        }),
+    });
+    render(<CompaniesScreen />);
+
+    const { user, dialog } = await openEdit("Better Stack");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Save changes" }),
+    );
+
+    expect(
+      await within(dialog).findByText("url_template must contain {link}"),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/URL template/)).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
   });
 
   it("puts the edited company and updates its row", async () => {
