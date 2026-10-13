@@ -2,7 +2,16 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { getConfig, toConfigInput, updateConfig, type Config } from "@/lib/api/config";
-import { formatUtc, isValidCron, nextCronRun, untilLabel } from "@/lib/cron";
+import {
+  browserTimeZone,
+  DEFAULT_TIME_ZONE,
+  formatInZone,
+  isValidCron,
+  isValidTimeZone,
+  listTimeZones,
+  nextCronRun,
+  untilLabel,
+} from "@/lib/cron";
 import { toFormErrors } from "@/lib/api/errors";
 
 type State =
@@ -12,9 +21,9 @@ type State =
 
 type Mode = "daily" | "weekdays" | "weekly" | "custom";
 
-type Draft = { mode: Mode; time: string; day: string; raw: string };
+type Draft = { mode: Mode; time: string; day: string; raw: string; timezone: string };
 
-const FIELDS = ["cron"] as const;
+const FIELDS = ["cron", "timezone"] as const;
 
 const MODES: { id: Mode; label: string }[] = [
   { id: "daily", label: "Daily" },
@@ -28,8 +37,8 @@ const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", 
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** Picks the preset that produces `cron`, or falls back to raw cron. */
-function toDraft(cron: string): Draft {
-  const base = { time: "07:00", day: "1", raw: cron };
+function toDraft(cron: string, timezone = DEFAULT_TIME_ZONE): Draft {
+  const base = { time: "07:00", day: "1", raw: cron, timezone };
   const m = /^(\d{1,2}) (\d{1,2}) \* \* (\*|1-5|[0-6])$/.exec(cron.trim());
   if (m && isValidCron(cron)) {
     return {
@@ -42,7 +51,7 @@ function toDraft(cron: string): Draft {
   return { ...base, mode: "custom" };
 }
 
-function toCron({ mode, time, day, raw }: Draft): string {
+function toCron({ mode, time, day, raw }: Omit<Draft, "timezone">): string {
   if (mode === "custom") return raw.trim();
   const [h, m] = time.split(":").map(Number);
   const dow = mode === "weekdays" ? "1-5" : mode === "weekly" ? day : "*";
@@ -59,6 +68,7 @@ export function ScheduleTab() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [fieldError, setFieldError] = useState<string>();
+  const [zoneError, setZoneError] = useState<string>();
   const [formError, setFormError] = useState<string>();
   // Captured once so the estimate doesn't change between renders.
   const [now] = useState(() => new Date());
@@ -69,7 +79,7 @@ export function ScheduleTab() {
       (config) => {
         if (cancelled) return;
         setState({ status: "ready", config });
-        setDraft(toDraft(config.cron));
+        setDraft(toDraft(config.cron, config.timezone || DEFAULT_TIME_ZONE));
       },
       (err: unknown) => !cancelled && setState({ status: "error", message: errorMessage(err) }),
     );
@@ -90,8 +100,17 @@ export function ScheduleTab() {
   const { config } = state;
   const cron = toCron(draft);
   const valid = isValidCron(cron);
-  const dirty = cron !== config.cron.trim();
-  const next = valid ? nextCronRun(cron, now) : null;
+  const savedZone = config.timezone || DEFAULT_TIME_ZONE;
+  const zone = draft.timezone.trim();
+  const zoneValid = isValidTimeZone(zone);
+  const dirty = cron !== config.cron.trim() || zone !== savedZone;
+  const next = valid && zoneValid ? nextCronRun(cron, now, zone) : null;
+  // Still on the default: offer the browser's zone, but never switch to it unasked.
+  const browserZone = browserTimeZone();
+  const suggestion =
+    savedZone === DEFAULT_TIME_ZONE && zone === DEFAULT_TIME_ZONE && browserZone !== DEFAULT_TIME_ZONE
+      ? browserZone
+      : undefined;
 
   function edit(patch: Partial<Draft>) {
     setDraft((d) => ({ ...d, ...patch }));
@@ -105,19 +124,21 @@ export function ScheduleTab() {
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!valid) return;
+    if (!valid || !zoneValid) return;
     setSaving(true);
     setSaved(false);
     setFieldError(undefined);
+    setZoneError(undefined);
     setFormError(undefined);
     try {
-      const updated = await updateConfig({ ...toConfigInput(config), cron });
+      const updated = await updateConfig({ ...toConfigInput(config), cron, timezone: zone });
       setState({ status: "ready", config: updated });
-      setDraft(toDraft(updated.cron));
+      setDraft(toDraft(updated.cron, updated.timezone || DEFAULT_TIME_ZONE));
       setSaved(true);
     } catch (err) {
       const errors = toFormErrors(err, FIELDS);
       setFieldError(errors.fieldErrors.cron);
+      setZoneError(errors.fieldErrors.timezone);
       setFormError(errors.formError);
     } finally {
       setSaving(false);
@@ -126,6 +147,7 @@ export function ScheduleTab() {
 
   const inputClass =
     "rounded-md border border-divider bg-field px-4 py-2 text-sm outline-none focus:border-accent aria-invalid:border-danger";
+  const timezoneError = !zoneValid ? "Pick a time zone from the list, e.g. Europe/Berlin." : zoneError;
   const cronError = !valid ? "Enter 5 fields: minute hour day-of-month month day-of-week." : fieldError;
 
   return (
@@ -178,7 +200,7 @@ export function ScheduleTab() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="schedule-time" className="text-sm font-medium">
-              Time (UTC)
+              Time ({zone})
             </label>
             <input
               id="schedule-time"
@@ -212,6 +234,46 @@ export function ScheduleTab() {
       )}
 
       <div className="flex flex-col gap-1.5">
+        <label htmlFor="schedule-timezone" className="text-sm font-medium">
+          Time zone
+        </label>
+        {/* A datalist gives a searchable list of IANA zones with no extra widget. */}
+        <input
+          id="schedule-timezone"
+          list="schedule-timezones"
+          value={draft.timezone}
+          onChange={(e) => edit({ timezone: e.target.value })}
+          spellCheck={false}
+          autoComplete="off"
+          aria-invalid={timezoneError ? true : undefined}
+          aria-describedby={timezoneError ? "schedule-timezone-error" : undefined}
+          className={inputClass}
+        />
+        <datalist id="schedule-timezones">
+          {listTimeZones().map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
+        {timezoneError && (
+          <p id="schedule-timezone-error" className="text-sm text-danger">
+            {timezoneError}
+          </p>
+        )}
+        {suggestion && (
+          <p className="text-sm text-muted">
+            Your browser is in {suggestion}.{" "}
+            <button
+              type="button"
+              onClick={() => edit({ timezone: suggestion })}
+              className="font-semibold text-accent-strong hover:underline"
+            >
+              Use {suggestion}
+            </button>
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
         <label htmlFor="schedule-cron" className="text-sm font-medium">
           Cron expression
         </label>
@@ -234,14 +296,14 @@ export function ScheduleTab() {
 
       <p className="rounded-md border border-accent/40 bg-surface px-4 py-3 text-sm">
         Next run{" "}
-        <strong>{next ? formatUtc(next) : "—"}</strong>
+        <strong>{next ? formatInZone(next, zone) : "—"}</strong>
         {next && ` — ${untilLabel(next.getTime() - now.getTime())} from now.`}
       </p>
 
       <div className="flex items-center justify-end gap-3 rounded-md border border-divider px-4 py-3">
         <button
           type="submit"
-          disabled={!dirty || !valid || saving}
+          disabled={!dirty || !valid || !zoneValid || saving}
           className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:opacity-60"
         >
           {saving ? "Saving…" : "Save"}

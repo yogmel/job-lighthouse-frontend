@@ -112,6 +112,23 @@ describe("RunsScreen", () => {
     vi.restoreAllMocks();
   });
 
+  it("shows the next run in the configured time zone", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const path = String(input).replace("http://api.test", "");
+      if (path === "/runs") return json(200, RUNS);
+      if (path === "/companies") return json(200, COMPANIES);
+      if (path === "/config") return json(200, { cron: "0 7 * * *", timezone: "Asia/Kolkata" });
+      return json(200, LATEST_RESULTS);
+    });
+    render(<RunsScreen />);
+
+    // 07:00 in India (UTC+5:30) is 01:30Z, so after 10:00Z on 2 Oct the next one is Sat 3 Oct.
+    const detail = await within(await screen.findByText("Next run").then(() => card("Next run"))).findByText(
+      /^Sat 3 Oct, 07:00 /,
+    );
+    expect(detail).not.toHaveTextContent(/UTC$/);
+  });
+
   it("lists the history newest first", async () => {
     mockApi();
     render(<RunsScreen />);

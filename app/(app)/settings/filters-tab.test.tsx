@@ -11,6 +11,7 @@ const CONFIG: Config = {
   keywords_exclude: ["intern"],
   location: "Berlin",
   cron: "0 7 * * *",
+  timezone: "UTC",
   profile: "# Profile",
   profile_version: 3,
 };
@@ -70,6 +71,7 @@ describe("FiltersTab", () => {
       keywords_exclude: ["intern", "junior"],
       location: "Berlin",
       cron: "0 7 * * *",
+      timezone: "UTC",
       profile: "# Profile",
     });
   });

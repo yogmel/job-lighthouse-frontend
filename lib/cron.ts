@@ -1,8 +1,8 @@
 /**
  * Minimal 5-field cron support for the Settings → Schedule tab: validate an
  * expression and estimate its next run. The backend tick loop owns the real
- * schedule; this is only a preview. Expressions are evaluated in UTC, which
- * is what the scheduler is assumed to use (SYSTEM_DESIGN.md doesn't say).
+ * schedule; this is only a preview. Expressions are evaluated in the IANA time
+ * zone from `Config.timezone` (UTC by default), so "9am" follows DST.
  */
 
 type Field = { values: Set<number>; any: boolean };
@@ -63,35 +63,95 @@ export function isValidCron(expression: string): boolean {
   return parse(expression) !== null;
 }
 
-function dayMatches(c: Parsed, date: Date): boolean {
-  if (!c.month.values.has(date.getUTCMonth() + 1)) return false;
-  const domOk = c.dom.values.has(date.getUTCDate());
-  const dowOk = c.dow.values.has(date.getUTCDay());
+export const DEFAULT_TIME_ZONE = "UTC";
+
+/** True for any zone name the runtime's Intl knows (IANA names and aliases like "UTC"). */
+export function isValidTimeZone(timeZone: string): boolean {
+  if (!timeZone) return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** IANA zone names for a picker; always includes UTC, which some runtimes leave out. */
+export function listTimeZones(): string[] {
+  const zones = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
+  return zones.includes(DEFAULT_TIME_ZONE) ? zones : [DEFAULT_TIME_ZONE, ...zones];
+}
+
+/** The zone the browser runs in, e.g. "Europe/Berlin". */
+export function browserTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || DEFAULT_TIME_ZONE;
+}
+
+type Wall = { month: number; day: number; dow: number; hour: number; minute: number };
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const wallFormats = new Map<string, Intl.DateTimeFormat>();
+
+/** The clock and calendar on the wall in `timeZone` at this instant. */
+function wallTime(date: Date, timeZone: string): Wall {
+  let format = wallFormats.get(timeZone);
+  if (!format) {
+    format = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hourCycle: "h23",
+      weekday: "short",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+    });
+    wallFormats.set(timeZone, format);
+  }
+  const parts = format.formatToParts(date);
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return {
+    month: Number(part("month")),
+    day: Number(part("day")),
+    dow: WEEKDAYS.indexOf(part("weekday")),
+    hour: Number(part("hour")),
+    minute: Number(part("minute")),
+  };
+}
+
+function dayMatches(c: Parsed, wall: Wall): boolean {
+  if (!c.month.values.has(wall.month)) return false;
+  const domOk = c.dom.values.has(wall.day);
+  const dowOk = c.dow.values.has(wall.dow);
   // Standard cron: when both day fields are restricted, either may match.
   if (!c.dom.any && !c.dow.any) return domOk || dowOk;
   return domOk && dowOk;
 }
 
-/** The first run strictly after `from`, or null if invalid or none within 5 years. */
-export function nextCronRun(expression: string, from: Date): Date | null {
+const MINUTE = 60_000;
+
+/**
+ * The first run strictly after `from`, evaluating the expression on the wall
+ * clock of `timeZone`; null if invalid or none within 5 years. A wall time that
+ * does not exist (spring-forward gap) is skipped; one that happens twice
+ * (fall-back) runs at its first occurrence.
+ */
+export function nextCronRun(expression: string, from: Date, timeZone = DEFAULT_TIME_ZONE): Date | null {
   const c = parse(expression);
-  if (!c) return null;
+  if (!c || !isValidTimeZone(timeZone)) return null;
 
-  const t = new Date(from.getTime());
-  t.setUTCSeconds(0, 0);
-  t.setUTCMinutes(t.getUTCMinutes() + 1);
-
-  const limit = from.getTime() + 5 * 366 * 24 * 60 * 60 * 1000;
-  while (t.getTime() <= limit) {
-    if (!dayMatches(c, t)) {
-      t.setUTCDate(t.getUTCDate() + 1);
-      t.setUTCHours(0, 0, 0, 0);
-    } else if (!c.hour.values.has(t.getUTCHours())) {
-      t.setUTCHours(t.getUTCHours() + 1, 0, 0, 0);
-    } else if (!c.minute.values.has(t.getUTCMinutes())) {
-      t.setUTCMinutes(t.getUTCMinutes() + 1);
+  let t = Math.floor(from.getTime() / MINUTE) * MINUTE + MINUTE;
+  const limit = from.getTime() + 5 * 366 * 24 * 60 * MINUTE;
+  while (t <= limit) {
+    const wall = wallTime(new Date(t), timeZone);
+    if (!dayMatches(c, wall)) {
+      // Toward the next local midnight, an hour short so a DST jump cannot skip it.
+      t += Math.max(60, (24 - wall.hour) * 60 - wall.minute - 60) * MINUTE;
+    } else if (!c.hour.values.has(wall.hour)) {
+      t += (60 - wall.minute) * MINUTE;
+    } else if (!c.minute.values.has(wall.minute)) {
+      t += MINUTE;
     } else {
-      return t;
+      return new Date(t);
     }
   }
   return null;
@@ -106,18 +166,30 @@ export function untilLabel(ms: number): string {
   return `about ${h > 0 ? `${h}h ` : ""}${m}m`.replace(" 0m", "");
 }
 
-// The cron runs in UTC, so schedule times are shown in UTC too.
-const utcFormat = new Intl.DateTimeFormat("en-GB", {
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-  timeZone: "UTC",
-});
+const zoneFormats = new Map<string, Intl.DateTimeFormat>();
 
-/** "Fri 2 Oct, 07:00 UTC" */
-export function formatUtc(date: Date): string {
-  return `${utcFormat.format(date)} UTC`;
+/** "Fri 2 Oct, 07:00 UTC", "Fri 2 Oct, 09:00 GMT+2" — the zone abbreviation is the runtime's. */
+export function formatInZone(date: Date, timeZone = DEFAULT_TIME_ZONE): string {
+  let format = zoneFormats.get(timeZone);
+  if (!format) {
+    format = new Intl.DateTimeFormat("en-GB", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone,
+      timeZoneName: "short",
+    });
+    zoneFormats.set(timeZone, format);
+  }
+  const parts = format.formatToParts(date);
+  const zone = parts.find((p) => p.type === "timeZoneName")?.value ?? timeZone;
+  const rest = parts
+    .filter((p) => p.type !== "timeZoneName")
+    .map((p) => p.value)
+    .join("")
+    .trim();
+  return `${rest} ${zone}`;
 }

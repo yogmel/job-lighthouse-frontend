@@ -96,6 +96,7 @@ export function AppHeader() {
   const [counts, setCounts] = useState<Counts>({});
   const [runs, setRuns] = useState<Run[]>();
   const [cron, setCron] = useState<string>();
+  const [timezone, setTimezone] = useState<string>();
   const [now, setNow] = useState(() => new Date());
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -135,7 +136,10 @@ export function AppHeader() {
 
   useEffect(() => {
     getConfig().then(
-      (config) => setCron(config.cron),
+      (config) => {
+        setCron(config.cron);
+        setTimezone(config.timezone);
+      },
       () => {},
     );
   }, []);
@@ -192,7 +196,7 @@ export function AppHeader() {
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
             {allRuns && (
               <p className="text-xs text-muted" aria-label="Run status">
-                {runStatusText(allRuns, cron, now)}
+                {runStatusText(allRuns, cron, now, timezone)}
               </p>
             )}
             <button

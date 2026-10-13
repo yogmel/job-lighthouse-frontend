@@ -176,7 +176,8 @@ user_id: string;
 keywords_include: string[];
 keywords_exclude: string[]; // word-boundary matched, applied at scrape time
 location: string;
-cron: Cron;
+cron: Cron; // evaluated in `timezone`
+timezone: string; // IANA name, default "UTC"; Settings → Schedule picks it
 profile: string; // markdown, replaces docs/PROFILE.md
 profile_version: number; // bumped on every profile edit
 ```
@@ -462,7 +463,8 @@ Cron` box is conceptual: the scheduler and the `/config` endpoints live
 
 **Tick loop:** the service wakes every minute, reads `Config.cron`, and compares
 it against the last run's `started_at` (from `Runs`) to decide whether a run is
-due.
+due. The expression is read on the wall clock of `Config.timezone`, so a
+"9am" schedule keeps 9am across DST changes.
 
 Ticking, rather than registering a cron job at boot, is what keeps `Config.cron`
 meaningful — `PUT /config` changes the schedule on the next tick, with no
