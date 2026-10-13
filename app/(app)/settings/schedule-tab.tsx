@@ -13,6 +13,7 @@ import {
   untilLabel,
 } from "@/lib/cron";
 import { toFormErrors } from "@/lib/api/errors";
+import { useTimeZone } from "../time-zone-context";
 
 type State =
   | { status: "loading" }
@@ -63,6 +64,7 @@ function errorMessage(err: unknown): string {
 }
 
 export function ScheduleTab() {
+  const { setTimeZone } = useTimeZone();
   const [state, setState] = useState<State>({ status: "loading" });
   const [draft, setDraft] = useState<Draft>(() => toDraft(""));
   const [saving, setSaving] = useState(false);
@@ -133,6 +135,7 @@ export function ScheduleTab() {
     try {
       const updated = await updateConfig({ ...toConfigInput(config), cron, timezone: zone });
       setState({ status: "ready", config: updated });
+      setTimeZone(updated.timezone || DEFAULT_TIME_ZONE);
       setDraft(toDraft(updated.cron, updated.timezone || DEFAULT_TIME_ZONE));
       setSaved(true);
     } catch (err) {

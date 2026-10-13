@@ -1,8 +1,8 @@
 import type { Company, Source } from "@/lib/api/companies";
+import { formatDate } from "@/lib/dates";
+import { useTimeZone } from "../time-zone-context";
 import { nextSort, type CompanySort, type SortKey } from "./company-sort";
 import { RowActions, type RowAction } from "./row-actions";
-
-const dateFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
 
 /** Board name for board-backed companies, otherwise the source kind. */
 export function sourceLabel(source: Source): string {
@@ -89,6 +89,7 @@ type Props = {
 };
 
 export function CompaniesTable({ companies, sort, onSort, rowActions }: Props) {
+  const { timeZone } = useTimeZone();
   return (
     // Scrolls inside the box.
     <div
@@ -141,7 +142,7 @@ export function CompaniesTable({ companies, sort, onSort, rowActions }: Props) {
               </td>
               <td className={`px-4 py-3 text-muted ${dim(company)}`}>{sourceLabel(company.source)}</td>
               <td className={`hidden px-4 py-3 text-muted sm:table-cell ${dim(company)}`}>
-                <time dateTime={company.added_at}>{dateFormat.format(new Date(company.added_at))}</time>
+                <time dateTime={company.added_at}>{formatDate(company.added_at, timeZone)}</time>
               </td>
               <td className={`px-4 py-3 ${dim(company)}`}>
                 <Status company={company} />

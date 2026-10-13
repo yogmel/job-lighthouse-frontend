@@ -11,7 +11,8 @@ import { formatInZone, nextCronRun, untilLabel } from "@/lib/cron";
 import { Banner, BANNER_DISMISS_MS } from "../banner";
 import { RunConfirmDialog } from "../run-confirm-dialog";
 import { useRuns, withRun } from "../run-context";
-import { isSameUtcDay, plural, startedLabel } from "./format";
+import { isSameDay, startedLabel } from "@/lib/dates";
+import { plural } from "./format";
 import { attentionReason, needsAttention, RunBreakdown } from "./run-breakdown";
 
 type State =
@@ -183,7 +184,7 @@ export function RunsScreen() {
         {state.status === "ready" && (
           <p className="text-sm text-muted">
             {plural(state.companies.filter((c) => c.active).length, "company", "companies")} per
-            run · times in UTC
+            run · times in {state.timezone}
           </p>
         )}
       </div>
@@ -231,7 +232,7 @@ export function RunsScreen() {
   }
 
   const next = nextCronRun(state.cron, now, state.timezone);
-  const today = runs.filter((r) => isSameUtcDay(new Date(r.started_at), now));
+  const today = runs.filter((r) => isSameDay(new Date(r.started_at), now, state.timezone));
   const newToday = today.reduce((sum, r) => sum + r.jobs_found, 0);
   const latestResults = latest && breakdowns[latest.id]?.results;
   const scraped = latestResults?.reduce((sum, r) => sum + r.jobs_found, 0);
@@ -385,7 +386,7 @@ export function RunsScreen() {
                             aria-pressed={isSelected}
                             className="rounded-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                           >
-                            {startedLabel(run.started_at, now)}
+                            {startedLabel(run.started_at, now, state.timezone)}
                           </button>
                         </td>
                         <td className="px-4 py-3 text-muted">
@@ -420,6 +421,7 @@ export function RunsScreen() {
             <RunBreakdown
               run={selected}
               now={now}
+              timeZone={state.timezone}
               companies={companies}
               results={breakdowns[selected.id]?.results}
               error={breakdowns[selected.id]?.error}

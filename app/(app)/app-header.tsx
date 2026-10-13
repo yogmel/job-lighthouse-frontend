@@ -13,6 +13,7 @@ import { Banner, BANNER_DISMISS_MS } from "./banner";
 import { activeTab, runStatusText, TABS } from "./nav";
 import { RunConfirmDialog } from "./run-confirm-dialog";
 import { useRuns, withRun } from "./run-context";
+import { useTimeZone } from "./time-zone-context";
 
 type Counts = { jobs?: number; companies?: number };
 
@@ -96,7 +97,7 @@ export function AppHeader() {
   const [counts, setCounts] = useState<Counts>({});
   const [runs, setRuns] = useState<Run[]>();
   const [cron, setCron] = useState<string>();
-  const [timezone, setTimezone] = useState<string>();
+  const { timeZone: timezone } = useTimeZone();
   const [now, setNow] = useState(() => new Date());
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -138,7 +139,6 @@ export function AppHeader() {
     getConfig().then(
       (config) => {
         setCron(config.cron);
-        setTimezone(config.timezone);
       },
       () => {},
     );

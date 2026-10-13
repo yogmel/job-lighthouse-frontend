@@ -667,6 +667,9 @@ Notable UI-driven details already folded into the schema/API above:
 - Filters split into include/exclude (Config schema)
 - Profile edits explicitly do **not** offer a rescore ("applies to the next
   run; already-scored jobs keep their score")
+- Every date in the app (run history, run details, job and company dates, "Today"
+  on the Runs cards) is shown in `Config.timezone` through one formatter,
+  `lib/dates.ts`; the zone is shared app-wide by `TimeZoneProvider`
 - Changing a company's tier re-groups its jobs in the UI — no schema
   implication, purely a client-side grouping key
 - Row-level "0 jobs last run" / "fetch failed" flags read from
