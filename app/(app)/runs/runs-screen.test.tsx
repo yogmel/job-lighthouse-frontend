@@ -57,13 +57,14 @@ const result = (
   jobs_found: number,
   error: string | null = null,
   company_name = COMPANIES.find((c) => c.id === company_id)?.name ?? "",
-): RunCompanyResult => ({ id, run_id: "r3", company_id, company_name, status, jobs_found, error });
+  new_jobs = 0,
+): RunCompanyResult => ({ id, run_id: "r3", company_id, company_name, status, jobs_found, new_jobs, error });
 
 const LATEST_RESULTS: RunCompanyResult[] = [
   result("x4", "c4", "skipped", 0),
   result("x2", "c2", "failed", 0, "selector miss"),
-  result("x1", "c1", "ok", 34),
-  result("x3", "c3", "ok", 1),
+  result("x1", "c1", "ok", 34, null, undefined, 11),
+  result("x3", "c3", "ok", 1, null, undefined, 1),
 ];
 
 const CONFIG = { cron: "0 7 * * *" } as Config;
@@ -151,11 +152,12 @@ describe("RunsScreen", () => {
     const region = await screen.findByRole("region", { name: "Per-company breakdown" });
     const items = await within(region).findAllByRole("listitem");
     expect(items.map((li) => li.textContent)).toEqual([
-      "Northwind · greenhouse · 34 jobsok",
-      "Northstar · scraper · 0 jobs · selector missfailed",
-      "Fernwell · lever · 1 job · likely partialok",
+      "Northwind · greenhouse · 11 new jobs · 34 scrapedok",
+      "Northstar · scraper · 0 new jobs · 0 scraped · selector missfailed",
+      "Fernwell · lever · 1 new job · 1 scraped · likely partialok",
       "Vela · ashbyskipped",
     ]);
+    expect(within(region).getByText("12 new jobs")).toBeInTheDocument();
     expect(within(region).getByText("Today 07:04")).toBeInTheDocument();
     expect(within(region).getByText("38s · 4 companies")).toBeInTheDocument();
   });
@@ -168,7 +170,7 @@ describe("RunsScreen", () => {
     await user.click(await screen.findByRole("button", { name: "Yesterday 07:03" }));
 
     expect(within(breakdown()).getByText("Yesterday 07:03")).toBeInTheDocument();
-    expect(await within(breakdown()).findByText("Northwind · greenhouse · 30 jobs")).toBeInTheDocument();
+    expect(await within(breakdown()).findByText("Northwind · greenhouse · 0 new jobs · 30 scraped")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Yesterday 07:03" })).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -177,11 +179,11 @@ describe("RunsScreen", () => {
 
   it("labels results for companies that were removed since", async () => {
     mockApi(RUNS, {
-      "GET /runs/r3/companies": () => json(200, [result("z1", "gone", "ok", 4)]),
+      "GET /runs/r3/companies": () => json(200, [result("z1", "gone", "ok", 4, null, undefined, 2)]),
     });
     render(<RunsScreen />);
 
-    expect(await screen.findByText("Removed company · 4 jobs")).toBeInTheDocument();
+    expect(await screen.findByText("Removed company · 2 new jobs · 4 scraped")).toBeInTheDocument();
   });
 
   it("marks Single-company runs and names the company from the breakdown", async () => {

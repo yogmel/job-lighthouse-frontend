@@ -47,6 +47,7 @@ const result = (
   company_name: company_id,
   status,
   jobs_found,
+  new_jobs: 0,
   error: null,
 });
 
