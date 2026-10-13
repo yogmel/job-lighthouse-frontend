@@ -257,6 +257,7 @@ describe("RunsScreen", () => {
     render(<RunsScreen />);
 
     await user.click(await screen.findByRole("button", { name: "Run now" }));
+    await user.click(screen.getByRole("button", { name: "Start run" }));
 
     expect(await screen.findByRole("status")).toHaveTextContent("Run started.");
     const first = within(screen.getByRole("region", { name: "History" })).getAllByRole("row")[1];
@@ -267,12 +268,29 @@ describe("RunsScreen", () => {
     expect(await within(breakdown()).findByText("Running · 0 companies")).toBeInTheDocument();
   });
 
+  it("asks before a Full run and starts nothing on Cancel", async () => {
+    const spy = mockApi(RUNS, { "POST /runs": () => json(202, RUNS[0]) });
+    const user = userEvent.setup();
+    render(<RunsScreen />);
+
+    await user.click(await screen.findByRole("button", { name: "Run now" }));
+    const dialog = screen.getByRole("dialog", { name: "Run now?" });
+    expect(dialog).toHaveTextContent("every active company");
+
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(spy.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "Run now" })).toHaveFocus();
+  });
+
   it("says so when a run is already in progress", async () => {
     mockApi(RUNS, { "POST /runs": () => json(409, { detail: "Run in progress" }) });
     const user = userEvent.setup();
     render(<RunsScreen />);
 
     await user.click(await screen.findByRole("button", { name: "Run now" }));
+    await user.click(screen.getByRole("button", { name: "Start run" }));
 
     expect(await screen.findByRole("status")).toHaveTextContent("A run is already in progress.");
   });

@@ -13,6 +13,7 @@ import { ApiError } from "@/lib/api/client";
 import { listRunCompanies, listRuns } from "@/lib/api/runs";
 import { toFormErrors } from "@/lib/api/errors";
 import { Banner, BANNER_DISMISS_MS } from "../banner";
+import { RunConfirmDialog } from "../run-confirm-dialog";
 import { useRuns } from "../run-context";
 import { CompaniesTable, needsCustomHandling } from "./companies-table";
 import { CompanyDialog } from "./company-dialog";
@@ -111,6 +112,7 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Company>();
   const [removing, setRemoving] = useState<Company>();
+  const [confirmingRun, setConfirmingRun] = useState<Company>();
   const [banner, setBanner] = useState<string | undefined>(justAdded && addedBanner(justAdded));
   const [actionError, setActionError] = useState<string>();
   const [runningId, setRunningId] = useState<string>();
@@ -216,6 +218,7 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
 
   /** Starts a Single-company run. 409 (paused / run in progress) and 404 show the backend's message. */
   async function runNow(company: Company) {
+    setConfirmingRun(undefined);
     if (runningId) return;
     setRunningId(company.id);
     setBanner(undefined);
@@ -258,7 +261,7 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
       edit,
       ...(company.active
         ? [
-            { label: "Run now", onSelect: () => runNow(company) },
+            { label: "Run now", onSelect: () => setConfirmingRun(company) },
             { label: "Pause watching", onSelect: () => setActive(company, false) },
           ]
         : [{ label: "Resume watching", onSelect: () => setActive(company, true) }]),
@@ -382,6 +385,14 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
           save={(input) => updateCompany(editing.id, input)}
           onSaved={(company) => onUpdated(editing, company)}
           onClose={() => setEditing(undefined)}
+        />
+      )}
+
+      {confirmingRun && (
+        <RunConfirmDialog
+          companyName={confirmingRun.name}
+          onConfirm={() => runNow(confirmingRun)}
+          onClose={() => setConfirmingRun(undefined)}
         />
       )}
 
