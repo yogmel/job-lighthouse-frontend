@@ -2,7 +2,13 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Company } from "@/lib/api/companies";
+import { RunProvider } from "../run-context";
 import { CompaniesScreen } from "./companies-screen";
+
+// The real router keeps useSearchParams in sync with history.replaceState; here it reads the jsdom URL.
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
 
 const HALDEN: Company = {
   id: "c1",
@@ -509,7 +515,7 @@ describe("CompaniesScreen · pause and remove", () => {
     const user = await chooseAction("Halden", "Remove company");
     const dialog = screen.getByRole("dialog", { name: "Remove Halden?" });
     expect(dialog).toHaveTextContent("all of its jobs will be deleted");
-    expect(spy).toHaveBeenCalledTimes(1); // only the list load
+    expect(spy.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(0);
 
     await user.click(
       within(dialog).getByRole("button", { name: "Remove company" }),
@@ -522,8 +528,8 @@ describe("CompaniesScreen · pause and remove", () => {
       "Halden and its jobs removed.",
     );
     expect(screen.getByText("Northstar")).toBeInTheDocument();
-    expect(spy.mock.calls[1][0]).toBe("http://api.test/companies/c1");
-    expect(spy.mock.calls[1][1]?.method).toBe("DELETE");
+    const deletes = spy.mock.calls.filter(([, init]) => init?.method === "DELETE");
+    expect(deletes.map(([input]) => input)).toEqual(["http://api.test/companies/c1"]);
   });
 
   it("sends nothing when removal is cancelled", async () => {
@@ -539,7 +545,7 @@ describe("CompaniesScreen · pause and remove", () => {
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByText("Halden")).toBeInTheDocument();
-    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(0);
   });
 
   it("keeps the dialog open on 409 so the removal can be retried", async () => {
@@ -733,5 +739,225 @@ describe("CompaniesScreen links and banners", () => {
     expect(
       screen.queryByText("Run started for Halden."),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("CompaniesScreen filters", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    window.history.replaceState(null, "", "/companies");
+  });
+
+  const LEVER_CO: Company = {
+    ...HALDEN,
+    id: "c4",
+    name: "Lumen",
+    tier: 2,
+    source: { kind: "board", board: "lever", board_id: "lumen" },
+  };
+  const ALL = [HALDEN, NORTHSTAR, ORBIT, LEVER_CO];
+
+  const fullRun = {
+    id: "r1",
+    user_id: "u1",
+    started_at: "2026-10-02T07:00:00Z",
+    finished_at: "2026-10-02T07:05:00Z",
+    status: "success",
+    trigger: "cron",
+    scope: "full",
+    company_id: null,
+    jobs_found: 4,
+    error: null,
+  };
+  const results = [
+    { id: "x1", run_id: "r1", company_id: "c1", company_name: "Halden", status: "ok", jobs_found: 4, error: null },
+    { id: "x4", run_id: "r1", company_id: "c4", company_name: "Lumen", status: "failed", jobs_found: 0, error: "boom" },
+    { id: "x2", run_id: "r1", company_id: "c2", company_name: "Northstar", status: "skipped", jobs_found: 0, error: null },
+  ];
+  const runRoutes = {
+    "GET /runs": () => json(200, [fullRun]),
+    "GET /runs/r1/companies": () => json(200, results),
+  };
+
+  function names() {
+    const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);
+    return rows.map((row) => within(row).getAllByRole("cell")[0].textContent);
+  }
+
+  it("filters by tier and writes it to the URL", async () => {
+    mockApi(ALL, runRoutes);
+    const user = userEvent.setup();
+    render(<CompaniesScreen />);
+
+    await user.selectOptions(await screen.findByLabelText("Tier"), "2");
+
+    expect(names()).toEqual(["Lumen", "Orbit"]);
+    expect(window.location.search).toBe("?tier=2");
+  });
+
+  it("reads the filters from the URL", async () => {
+    window.history.replaceState(null, "", "/companies?status=paused&source=scraper");
+    mockApi(ALL, runRoutes);
+    render(<CompaniesScreen />);
+
+    expect(await screen.findByLabelText("Status")).toHaveValue("paused");
+    expect(screen.getByLabelText("Source")).toHaveValue("scraper");
+    expect(names()).toEqual(["Northstar"]);
+  });
+
+  it("offers every source", async () => {
+    mockApi(ALL, runRoutes);
+    render(<CompaniesScreen />);
+
+    const options = within(await screen.findByLabelText("Source")).getAllByRole("option");
+    expect(options.map((o) => o.textContent)).toEqual([
+      "All sources",
+      "Greenhouse",
+      "Lever",
+      "Ashby",
+      "SmartRecruiters",
+      "Scraper",
+      "Custom",
+    ]);
+  });
+
+  it("filters by the latest run's outcome", async () => {
+    mockApi(ALL, runRoutes);
+    const user = userEvent.setup();
+    render(<CompaniesScreen />);
+
+    await user.selectOptions(await screen.findByLabelText("Last run"), "failed");
+    expect(await screen.findByRole("table")).toBeInTheDocument();
+    expect(names()).toEqual(["Lumen"]);
+
+    await user.selectOptions(screen.getByLabelText("Last run"), "ok");
+    expect(names()).toEqual(["Halden"]);
+    expect(window.location.search).toBe("?last_run=ok");
+  });
+
+  it("combines filters with AND and offers a clear button when nothing matches", async () => {
+    window.history.replaceState(null, "", "/companies?added=x&tier=1&status=paused");
+    mockApi(ALL, runRoutes);
+    const user = userEvent.setup();
+    render(<CompaniesScreen />);
+
+    expect(await screen.findByText("No companies match these filters")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+
+    expect(names()).toEqual(["Halden", "Lumen", "Northstar", "Orbit"]);
+    expect(screen.getByLabelText("Tier")).toHaveValue("");
+    expect(window.location.search).toBe("?added=x");
+  });
+
+  it("reloads the last run after a run started here finishes", async () => {
+    let runs = [fullRun];
+    const spy = mockApi(ALL, {
+      "GET /runs": () => json(200, runs),
+      "GET /runs/r1/companies": () => json(200, results),
+      "GET /runs/r2/companies": () =>
+        json(200, [{ ...results[1], run_id: "r2", status: "ok", jobs_found: 3 }]),
+      "POST /runs": () => {
+        // Kept simple: the refetched history has a newer Full run with Lumen now ok.
+        runs = [{ ...fullRun, id: "r2", started_at: "2026-10-03T07:00:00Z" }, fullRun];
+        return json(200, { ...fullRun, id: "r2", scope: "company", company_id: "c4" });
+      },
+    });
+    window.history.replaceState(null, "", "/companies?last_run=failed");
+    const user = userEvent.setup();
+    render(
+      <RunProvider>
+        <CompaniesScreen />
+      </RunProvider>,
+    );
+    expect(await screen.findByRole("table")).toBeInTheDocument();
+    expect(names()).toEqual(["Lumen"]);
+
+    await user.click(screen.getByRole("button", { name: "Actions for Lumen" }));
+    await user.click(screen.getByRole("menuitem", { name: "Run now" }));
+
+    expect(await screen.findByText("No companies match these filters")).toBeInTheDocument();
+    expect(spy.mock.calls.filter(([input]) => String(input).endsWith("/runs/r2/companies"))).toHaveLength(1);
+  });
+
+  it("says so when the last run can't be loaded", async () => {
+    window.history.replaceState(null, "", "/companies?last_run=ok");
+    mockApi(ALL, { "GET /runs": () => json(500, { detail: "boom" }) });
+    render(<CompaniesScreen />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load the last run");
+  });
+
+  it("shows no filters when there are no companies", async () => {
+    mockApi([], runRoutes);
+    render(<CompaniesScreen />);
+
+    expect(await screen.findByText("No companies yet")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Tier")).not.toBeInTheDocument();
+  });
+});
+
+describe("CompaniesScreen sorting", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    window.history.replaceState(null, "", "/companies");
+  });
+
+  // Listed out of order on purpose: the screen sorts them.
+  const LIST = [ORBIT, HALDEN, NORTHSTAR];
+
+  function names() {
+    const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);
+    return rows.map((row) => within(row).getAllByRole("cell")[0].textContent);
+  }
+
+  const header = (name: string) => screen.getByRole("columnheader", { name });
+
+  it("sorts by name A–Z by default", async () => {
+    mockApi(LIST);
+    render(<CompaniesScreen />);
+
+    await screen.findByRole("table");
+    expect(names()).toEqual(["Halden", "Northstar", "Orbit"]);
+    expect(header("Name")).toHaveAttribute("aria-sort", "ascending");
+    expect(header("Added")).not.toHaveAttribute("aria-sort");
+  });
+
+  it("sorts by a header and flips on the second click, keeping it in the URL", async () => {
+    mockApi(LIST);
+    const user = userEvent.setup();
+    render(<CompaniesScreen />);
+    await screen.findByRole("table");
+
+    await user.click(screen.getByRole("button", { name: "Added" }));
+    expect(names()).toEqual(["Orbit", "Northstar", "Halden"]);
+    expect(header("Added")).toHaveAttribute("aria-sort", "descending");
+    expect(header("Name")).not.toHaveAttribute("aria-sort");
+    expect(window.location.search).toBe("?sort=-added");
+
+    await user.click(screen.getByRole("button", { name: "Added" }));
+    expect(names()).toEqual(["Halden", "Northstar", "Orbit"]);
+    expect(header("Added")).toHaveAttribute("aria-sort", "ascending");
+    expect(window.location.search).toBe("?sort=added");
+
+    await user.click(screen.getByRole("button", { name: "Name" }));
+    await user.click(screen.getByRole("button", { name: "Name" }));
+    expect(names()).toEqual(["Orbit", "Northstar", "Halden"]);
+    expect(header("Name")).toHaveAttribute("aria-sort", "descending");
+    expect(window.location.search).toBe("?sort=-name");
+  });
+
+  it("reads the sort from the URL and keeps the filters beside it", async () => {
+    window.history.replaceState(null, "", "/companies?status=paused&sort=-name");
+    mockApi(LIST);
+    const user = userEvent.setup();
+    render(<CompaniesScreen />);
+
+    await screen.findByRole("table");
+    expect(names()).toEqual(["Orbit", "Northstar"]);
+
+    await user.click(screen.getByRole("button", { name: "Name" }));
+    expect(window.location.search).toBe("?status=paused");
   });
 });

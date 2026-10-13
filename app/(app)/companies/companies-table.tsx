@@ -1,4 +1,5 @@
 import type { Company, Source } from "@/lib/api/companies";
+import { nextSort, type CompanySort, type SortKey } from "./company-sort";
 import { RowMenu, type RowMenuItem } from "./row-menu";
 
 const dateFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
@@ -44,13 +45,50 @@ function Status({ company }: { company: Company }) {
   );
 }
 
+/** A header that sorts by its column; `aria-sort` sits on the `<th>`, the click on the button inside. */
+function SortHeader({
+  label,
+  column,
+  sort,
+  onSort,
+  className = "",
+}: {
+  label: string;
+  column: SortKey;
+  sort: CompanySort;
+  onSort: (sort: CompanySort) => void;
+  className?: string;
+}) {
+  const sorted = sort.key === column;
+  return (
+    <th
+      scope="col"
+      aria-sort={sorted ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}
+      className={`px-4 py-2.5 font-medium ${className}`}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(nextSort(sort, column))}
+        className={`inline-flex items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${sorted ? "text-foreground" : ""}`}
+      >
+        {label}
+        <span aria-hidden="true" className={sorted ? "" : "invisible"}>
+          {sort.dir === "asc" || !sorted ? "↑" : "↓"}
+        </span>
+      </button>
+    </th>
+  );
+}
+
 type Props = {
   companies: Company[];
+  sort: CompanySort;
+  onSort: (sort: CompanySort) => void;
   /** Row menu actions for one company. */
   menuItems: (company: Company) => RowMenuItem[];
 };
 
-export function CompaniesTable({ companies, menuItems }: Props) {
+export function CompaniesTable({ companies, sort, onSort, menuItems }: Props) {
   return (
     // Scrolls inside the box; the row menu is fixed-positioned so this overflow doesn't clip it.
     <div
@@ -60,10 +98,16 @@ export function CompaniesTable({ companies, menuItems }: Props) {
       <table className="w-full text-left text-sm">
         <thead className="sticky top-0 z-10 bg-surface text-xs text-muted shadow-[0_1px_0_var(--color-divider)]">
           <tr>
-            <th scope="col" className="px-4 py-2.5 font-medium">Name</th>
+            <SortHeader label="Name" column="name" sort={sort} onSort={onSort} />
             <th scope="col" className="px-4 py-2.5 font-medium">Tier</th>
             <th scope="col" className="px-4 py-2.5 font-medium">Job board</th>
-            <th scope="col" className="hidden px-4 py-2.5 font-medium sm:table-cell">Added</th>
+            <SortHeader
+              label="Added"
+              column="added"
+              sort={sort}
+              onSort={onSort}
+              className="hidden sm:table-cell"
+            />
             <th scope="col" className="px-4 py-2.5 font-medium">Status</th>
             <th scope="col" className="w-12 px-4 py-2.5">
               <span className="sr-only">Actions</span>
