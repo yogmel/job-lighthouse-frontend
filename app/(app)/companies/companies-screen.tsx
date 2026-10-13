@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
   createCompany,
@@ -9,11 +10,23 @@ import {
   type Company,
 } from "@/lib/api/companies";
 import { ApiError } from "@/lib/api/client";
+import { listRunCompanies, listRuns } from "@/lib/api/runs";
 import { toFormErrors } from "@/lib/api/errors";
 import { Banner, BANNER_DISMISS_MS } from "../banner";
 import { useRuns } from "../run-context";
 import { CompaniesTable, needsCustomHandling } from "./companies-table";
 import { CompanyDialog } from "./company-dialog";
+import { CompanyFilterBar } from "./company-filter-bar";
+import {
+  DEFAULT_FILTERS,
+  lastRunOutcomes,
+  latestFullRun,
+  matchesFilters,
+  parseFilters,
+  writeFilters,
+  type CompanyFilters,
+  type LastRunOutcome,
+} from "./company-filters";
 import type { CompanyDefaults } from "./company-fields";
 import { RemoveCompanyDialog } from "./remove-company-dialog";
 import type { RowMenuItem } from "./row-menu";
@@ -22,6 +35,17 @@ type State =
   | { status: "loading" }
   | { status: "error"; message: string }
   | { status: "ready"; companies: Company[] };
+
+/** Each Company's outcome in the latest Full run, for the Last run filter. */
+type LastRun =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ready"; outcomes: Map<string, LastRunOutcome> };
+
+async function loadLastRun(): Promise<Map<string, LastRunOutcome>> {
+  const run = latestFullRun(await listRuns());
+  return run ? lastRunOutcomes(await listRunCompanies(run.id)) : new Map();
+}
 
 function errorMessage(err: unknown): string {
   return toFormErrors(err, []).formError ?? "Something went wrong. Please try again.";
@@ -35,6 +59,30 @@ function summary(companies: Company[]): string {
   const paused = companies.filter((c) => !c.active).length;
   const watched = companies.length - paused;
   return paused > 0 ? `${watched} watched · ${paused} paused` : `${watched} watched`;
+}
+
+function FilteredTable({
+  companies,
+  menuItems,
+  onClear,
+}: {
+  companies: Company[];
+  menuItems: (company: Company) => RowMenuItem[];
+  onClear: () => void;
+}) {
+  if (companies.length > 0) return <CompaniesTable companies={companies} menuItems={menuItems} />;
+  return (
+    <div className="rounded-md border border-dashed border-divider px-6 py-12 text-center">
+      <h2 className="font-heading text-xl">No companies match these filters</h2>
+      <button
+        type="button"
+        onClick={onClear}
+        className="mt-3 text-sm font-semibold text-accent-strong hover:underline"
+      >
+        Clear filters
+      </button>
+    </div>
+  );
 }
 
 export type JustAdded = { name: string; found: number; matched: number; via: string };
@@ -54,12 +102,42 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
   const [runningId, setRunningId] = useState<string>();
   const { trigger } = useRuns();
   const dismissBanner = useCallback(() => setBanner(undefined), []);
+  const [lastRun, setLastRun] = useState<LastRun>({ status: "loading" });
+
+  // Filters live in the URL. Local state answers right away; it re-reads the
+  // URL whenever the query changes from outside (e.g. a link to /companies).
+  const searchParams = useSearchParams();
+  const query = searchParams.toString();
+  const [filters, setFilterState] = useState<CompanyFilters>(() => parseFilters(searchParams));
+  const [readQuery, setReadQuery] = useState(query);
+  if (query !== readQuery) {
+    setReadQuery(query);
+    setFilterState(parseFilters(searchParams));
+  }
+
+  function setFilters(next: CompanyFilters) {
+    setFilterState(next);
+    // Native history updates sync with useSearchParams without a server round trip.
+    const params = writeFilters(new URLSearchParams(window.location.search), next).toString();
+    window.history.replaceState(null, "", params ? `?${params}` : window.location.pathname);
+  }
 
   useEffect(() => {
     let cancelled = false;
     listCompanies().then(
       (companies) => !cancelled && setState({ status: "ready", companies }),
       (err: unknown) => !cancelled && setState({ status: "error", message: errorMessage(err) }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadLastRun().then(
+      (outcomes) => !cancelled && setLastRun({ status: "ready", outcomes }),
+      () => !cancelled && setLastRun({ status: "error" }),
     );
     return () => {
       cancelled = true;
@@ -229,7 +307,25 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
             </p>
           </div>
         ) : (
-          <CompaniesTable companies={state.companies} menuItems={menuItems} />
+          <>
+            <CompanyFilterBar filters={filters} companies={state.companies} onChange={setFilters} />
+            {filters.lastRun && lastRun.status === "error" && (
+              <p role="alert" className="text-sm text-danger">
+                Couldn&apos;t load the last run, so the Last run filter matches nothing.
+              </p>
+            )}
+            {filters.lastRun && lastRun.status === "loading" ? (
+              <p className="text-sm text-muted">Loading last run…</p>
+            ) : (
+              <FilteredTable
+                companies={state.companies.filter((c) =>
+                  matchesFilters(c, filters, lastRun.status === "ready" ? lastRun.outcomes : undefined),
+                )}
+                menuItems={menuItems}
+                onClear={() => setFilters(DEFAULT_FILTERS)}
+              />
+            )}
+          </>
         ))}
 
       {adding && (
