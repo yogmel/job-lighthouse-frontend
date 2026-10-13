@@ -146,10 +146,24 @@ describe("AppHeader", () => {
     await screen.findByText(/^Last run/);
 
     await user.click(screen.getByRole("button", { name: "Run now" }));
+    await user.click(screen.getByRole("button", { name: "Start run" }));
 
     expect(await screen.findByRole("status")).toHaveTextContent("Run started.");
     expect(screen.getByText("Running…")).toBeInTheDocument();
     expect(spy.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+  });
+
+  it("asks first and starts nothing on Cancel", async () => {
+    const spy = mockApi({ "POST /runs": () => json(202, STARTED) });
+    const user = userEvent.setup();
+    renderHeader();
+
+    await user.click(screen.getByRole("button", { name: "Run now" }));
+    expect(screen.getByRole("dialog", { name: "Run now?" })).toHaveTextContent("every active company");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(spy.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
   });
 
   it("treats a 409 as a run already in progress", async () => {
@@ -158,6 +172,7 @@ describe("AppHeader", () => {
     renderHeader();
 
     await user.click(screen.getByRole("button", { name: "Run now" }));
+    await user.click(screen.getByRole("button", { name: "Start run" }));
 
     expect(await screen.findByRole("status")).toHaveTextContent("A run is already in progress.");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -171,6 +186,7 @@ describe("AppHeader", () => {
     renderHeader();
 
     await user.click(screen.getByRole("button", { name: "Run now" }));
+    await user.click(screen.getByRole("button", { name: "Start run" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Run failed: lock timeout");
   });
@@ -193,6 +209,7 @@ describe("AppHeader", () => {
 
     // The header's Run now comes first in the document.
     await user.click(screen.getAllByRole("button", { name: "Run now" })[0]);
+    await user.click(screen.getByRole("button", { name: "Start run" }));
 
     const first = await vi.waitFor(() => {
       const row = within(history).getAllByRole("row")[1];

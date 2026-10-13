@@ -11,6 +11,7 @@ import { listJobs } from "@/lib/api/jobs";
 import { listRuns, type Run } from "@/lib/api/runs";
 import { Banner, BANNER_DISMISS_MS } from "./banner";
 import { activeTab, runStatusText, TABS } from "./nav";
+import { RunConfirmDialog } from "./run-confirm-dialog";
 import { useRuns, withRun } from "./run-context";
 
 type Counts = { jobs?: number; companies?: number };
@@ -97,6 +98,7 @@ export function AppHeader() {
   const [cron, setCron] = useState<string>();
   const [now, setNow] = useState(() => new Date());
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>();
 
   // Counts and run history can change on any screen, so refetch on navigation.
@@ -156,6 +158,7 @@ export function AppHeader() {
   }, [isRunning]);
 
   async function runNow() {
+    setConfirming(false);
     setBusy(true);
     setFeedback(undefined);
     try {
@@ -179,6 +182,7 @@ export function AppHeader() {
 
   return (
     <header className="border-b border-divider">
+      {confirming && <RunConfirmDialog onConfirm={runNow} onClose={() => setConfirming(false)} />}
       <div className="mx-auto flex w-full max-w-5xl flex-col px-4 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pt-4">
           <Link href="/jobs" className="flex min-w-0 items-center gap-2 font-heading text-xl">
@@ -193,7 +197,7 @@ export function AppHeader() {
             )}
             <button
               type="button"
-              onClick={runNow}
+              onClick={() => setConfirming(true)}
               disabled={busy}
               className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:opacity-60"
             >

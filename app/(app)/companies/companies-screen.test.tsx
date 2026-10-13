@@ -669,11 +669,26 @@ describe("CompaniesScreen Run now", () => {
 
     const user = await openMenu("Halden");
     await user.click(screen.getByRole("menuitem", { name: "Run now" }));
+    await user.click(screen.getByRole("button", { name: "Start run" }));
 
     expect(
       await screen.findByText("Run started for Halden."),
     ).toBeInTheDocument();
     expect(sentBody(spy, "POST /runs")).toEqual({ company_id: "c1" });
+  });
+
+  it("names the company in the confirm and starts nothing on Cancel", async () => {
+    const spy = mockApi([HALDEN], { "POST /runs": () => json(202, started) });
+    render(<CompaniesScreen />);
+
+    const user = await openMenu("Halden");
+    await user.click(screen.getByRole("menuitem", { name: "Run now" }));
+    const dialog = screen.getByRole("dialog", { name: "Run Halden now?" });
+    expect(dialog).toHaveTextContent("This checks Halden");
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(sentBody(spy, "POST /runs")).toBeUndefined();
   });
 
   it.each([
@@ -686,6 +701,7 @@ describe("CompaniesScreen Run now", () => {
 
     const user = await openMenu("Halden");
     await user.click(screen.getByRole("menuitem", { name: "Run now" }));
+    await user.click(screen.getByRole("button", { name: "Start run" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(detail);
   });
@@ -725,6 +741,7 @@ describe("CompaniesScreen links and banners", () => {
       await screen.findByRole("button", { name: "Actions for Halden" }),
     );
     await user.click(screen.getByRole("menuitem", { name: "Run now" }));
+    await user.click(screen.getByRole("button", { name: "Start run" }));
     expect(
       await screen.findByText("Run started for Halden."),
     ).toBeInTheDocument();

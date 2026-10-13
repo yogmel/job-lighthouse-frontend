@@ -9,6 +9,7 @@ import { toFormErrors } from "@/lib/api/errors";
 import { listRunCompanies, listRuns, type Run, type RunCompanyResult } from "@/lib/api/runs";
 import { formatUtc, nextCronRun, untilLabel } from "@/lib/cron";
 import { Banner, BANNER_DISMISS_MS } from "../banner";
+import { RunConfirmDialog } from "../run-confirm-dialog";
 import { useRuns, withRun } from "../run-context";
 import { isSameUtcDay, plural, startedLabel } from "./format";
 import { needsAttention, RunBreakdown } from "./run-breakdown";
@@ -67,6 +68,7 @@ export function RunsScreen() {
   const [selectedId, setSelectedId] = useState<string>();
   const [breakdowns, setBreakdowns] = useState<Record<string, Breakdown>>({});
   const [running, setRunning] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [banner, setBanner] = useState<string>();
   const [actionError, setActionError] = useState<string>();
   const dismissBanner = useCallback(() => setBanner(undefined), []);
@@ -112,6 +114,7 @@ export function RunsScreen() {
   }, [wanted]);
 
   async function runNow() {
+    setConfirming(false);
     setRunning(true);
     setBanner(undefined);
     setActionError(undefined);
@@ -149,7 +152,7 @@ export function RunsScreen() {
           </Link>
           <button
             type="button"
-            onClick={runNow}
+            onClick={() => setConfirming(true)}
             disabled={running}
             className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:opacity-60"
           >
@@ -157,6 +160,7 @@ export function RunsScreen() {
           </button>
         </div>
       )}
+      {confirming && <RunConfirmDialog onConfirm={runNow} onClose={() => setConfirming(false)} />}
     </div>
   );
 
