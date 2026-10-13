@@ -336,10 +336,16 @@ integrations.
 ```ts
 careers_url: string; // page to load
 job: string;         // job card container
-title: string;
-link: string;
-location?: string;
+title: string;       // `css`, `css@attr` or `@attr` (the card's own attribute)
+link: string;        // same forms as title
+location?: string;   // same forms as title
+url_template?: string; // builds the job URL from the link; must contain `{link}`, may use `{careers_url}`
 ```
+
+The company form shows the `@attr` help text under title, link and location,
+and an optional "URL template" field that is omitted when empty and must
+contain `{link}` on the client. Editing a company keeps `url_template` unless
+changed.
 
 ---
 

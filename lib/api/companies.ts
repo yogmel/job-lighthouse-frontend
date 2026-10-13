@@ -9,6 +9,7 @@ export type Selectors = {
   title: string;
   link: string;
   location?: string;
+  url_template?: string;
 };
 
 /** A company is watched through exactly one source; `custom` is v0.10. */

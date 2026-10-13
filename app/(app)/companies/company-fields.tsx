@@ -19,6 +19,7 @@ export const COMPANY_FIELDS = [
   "title",
   "link",
   "location",
+  "url_template",
 ] as const;
 export type CompanyField = (typeof COMPANY_FIELDS)[number];
 
@@ -40,6 +41,7 @@ function readSource(formData: FormData): EditableSource {
     };
   }
   const location = text(formData, "location");
+  const urlTemplate = text(formData, "url_template");
   return {
     kind: "scraper",
     strategy: formData.get("strategy") === "dynamic" ? "dynamic" : "static",
@@ -49,6 +51,7 @@ function readSource(formData: FormData): EditableSource {
       title: text(formData, "title"),
       link: text(formData, "link"),
       ...(location ? { location } : {}),
+      ...(urlTemplate ? { url_template: urlTemplate } : {}),
     },
   };
 }
@@ -62,6 +65,8 @@ export function readCompanyInput(formData: FormData): CompanyInput {
     source: readSource(formData),
   };
 }
+
+const ATTR_HINT = "Append `@attr` to read an attribute (e.g. `a@href`); `@attr` alone reads the card's own attribute.";
 
 const selectClass =
   "rounded-md border border-divider bg-field px-3 py-2 text-sm outline-none focus:border-accent";
@@ -215,6 +220,7 @@ export function CompanyFields({ idPrefix, defaults, errors = {}, tierHint }: Pro
               name="title"
               label="Title selector"
               defaultValue={scraper?.selectors.title}
+              hint={ATTR_HINT}
               error={errors.title}
             />
             <Field
@@ -222,6 +228,7 @@ export function CompanyFields({ idPrefix, defaults, errors = {}, tierHint }: Pro
               name="link"
               label="Link selector"
               defaultValue={scraper?.selectors.link}
+              hint={ATTR_HINT}
               error={errors.link}
             />
             <Field
@@ -230,7 +237,20 @@ export function CompanyFields({ idPrefix, defaults, errors = {}, tierHint }: Pro
               label="Location selector (optional)"
               required={false}
               defaultValue={scraper?.selectors.location}
+              hint={ATTR_HINT}
               error={errors.location}
+            />
+            <Field
+              idPrefix={idPrefix}
+              name="url_template"
+              label="URL template (optional)"
+              required={false}
+              placeholder="{careers_url}#{link}"
+              hint="Builds the job URL from the link value. Must contain {link}; {careers_url} is also allowed."
+              pattern=".*\{link\}.*"
+              patternMessage="Must contain {link}"
+              defaultValue={scraper?.selectors.url_template}
+              error={errors.url_template}
             />
           </div>
         </div>
