@@ -1,6 +1,6 @@
 import type { Run } from "@/lib/api/runs";
 import { nextCronRun, untilLabel } from "@/lib/cron";
-import { startedLabel } from "./runs/format";
+import { startedLabel } from "@/lib/dates";
 
 export type TabId = "jobs" | "companies" | "runs" | "profile";
 
@@ -43,7 +43,7 @@ export function runStatusText(
   );
   if (!latest) return `No runs yet${nextPart}`;
   if (latest.status === "running") return "Running…";
-  const started = startedLabel(latest.started_at, now).replace(/^(Today|Yesterday)/, (day) =>
+  const started = startedLabel(latest.started_at, now, timeZone).replace(/^(Today|Yesterday)/, (day) =>
     day.toLowerCase(),
   );
   return `Last run ${started}${nextPart}`;

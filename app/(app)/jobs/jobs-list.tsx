@@ -1,6 +1,6 @@
 import type { Job } from "@/lib/api/jobs";
-
-const dateFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
+import { formatDate } from "@/lib/dates";
+import { useTimeZone } from "../time-zone-context";
 
 /** Scraped URLs are untrusted: only link out to http(s). */
 export function safeHref(url: string): string | undefined {
@@ -25,6 +25,7 @@ type Props = {
 
 /** Jobs grouped by their company's tier (a client-side key), newest first. */
 export function JobsList({ jobs }: Props) {
+  const { timeZone } = useTimeZone();
   const groups = new Map<number | undefined, JobRow[]>();
   const sorted = [...jobs].sort(
     (a, b) =>
@@ -86,7 +87,7 @@ export function JobsList({ jobs }: Props) {
                           Closed
                         </span>
                       )}
-                      <time dateTime={job.date}>{dateFormat.format(new Date(job.date))}</time>
+                      <time dateTime={job.date}>{formatDate(job.date, timeZone)}</time>
                     </div>
                   </li>
                 );

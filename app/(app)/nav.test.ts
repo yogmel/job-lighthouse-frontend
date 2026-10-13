@@ -52,7 +52,8 @@ describe("runStatusText", () => {
   it("evaluates the next run in the given time zone", () => {
     const runs = [run("r1", "2026-10-02T07:04:00Z")];
     // 14:00 in India is 08:30Z, already past, so the next one is tomorrow.
-    expect(runStatusText(runs, "0 14 * * *", NOW, "Asia/Kolkata")).toBe("Last run today 07:04 · next in 22h 30m");
+    // The last run's clock follows the zone too: 07:04Z is 12:34 in India.
+    expect(runStatusText(runs, "0 14 * * *", NOW, "Asia/Kolkata")).toBe("Last run today 12:34 · next in 22h 30m");
   });
 
   it("says Running… while the newest run is going", () => {

@@ -1,7 +1,8 @@
 import { sourceLabel } from "@/app/(app)/companies/companies-table";
 import type { Company } from "@/lib/api/companies";
 import type { Run, RunCompanyResult } from "@/lib/api/runs";
-import { durationLabel, plural, startedLabel } from "./format";
+import { startedLabel } from "@/lib/dates";
+import { durationLabel, plural } from "./format";
 
 /** An ok fetch with 0 or 1 jobs usually means a stale selector or a partial page. */
 export function needsAttention(result: RunCompanyResult): boolean {
@@ -44,13 +45,15 @@ function describe(result: RunCompanyResult, company: Company | undefined): strin
 type Props = {
   run: Run;
   now: Date;
+  /** `Config.timezone`: the zone the start time is shown in. */
+  timeZone: string;
   companies: Map<string, Company>;
   /** undefined while loading. */
   results: RunCompanyResult[] | undefined;
   error?: string;
 };
 
-export function RunBreakdown({ run, now, companies, results, error }: Props) {
+export function RunBreakdown({ run, now, timeZone, companies, results, error }: Props) {
   const duration = durationLabel(run.started_at, run.finished_at);
   const meta = [
     duration ?? "Running",
@@ -68,7 +71,7 @@ export function RunBreakdown({ run, now, companies, results, error }: Props) {
         <p className="font-heading text-2xl">{plural(run.jobs_found, "new job")}</p>
       )}
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="font-semibold">{startedLabel(run.started_at, now)}</h2>
+        <h2 className="font-semibold">{startedLabel(run.started_at, now, timeZone)}</h2>
         <span className="text-xs text-muted">{meta.join(" · ")}</span>
       </div>
 

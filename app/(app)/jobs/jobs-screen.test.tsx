@@ -5,6 +5,7 @@ import type { Company } from "@/lib/api/companies";
 import type { Job } from "@/lib/api/jobs";
 import type { Run } from "@/lib/api/runs";
 import { RunProvider, useRuns } from "../run-context";
+import { TimeZoneProvider } from "../time-zone-context";
 import { JobsScreen } from "./jobs-screen";
 
 const HALDEN: Company = {
@@ -213,6 +214,20 @@ describe("JobsScreen", () => {
 
     expect(screen.queryByText("Data Engineer")).not.toBeInTheDocument();
     expect(screen.getByText("2 open")).toBeInTheDocument();
+  });
+
+  it("shows job dates in the configured time zone", async () => {
+    // 23:30Z on 20 Sept is already 21 Sept in Berlin.
+    mockApi([job({ date: "2026-09-20T23:30:00Z" })], [HALDEN], {
+      "GET /config": () => json(200, { cron: "0 7 * * *", timezone: "Europe/Berlin" }),
+    });
+    render(
+      <TimeZoneProvider>
+        <JobsScreen />
+      </TimeZoneProvider>,
+    );
+
+    expect(await screen.findByText("21 Sept")).toBeInTheDocument();
   });
 
   it("shows closed jobs when the status filter allows them", async () => {

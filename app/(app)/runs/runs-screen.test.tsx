@@ -82,11 +82,11 @@ function mockApi(
 ) {
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const key = `${init?.method ?? "GET"} ${String(input).replace("http://api.test", "")}`;
+    const route = routes[key];
+    if (route) return route();
     if (key === "GET /runs") return json(200, runs);
     if (key === "GET /companies") return json(200, COMPANIES);
     if (key === "GET /config") return json(200, CONFIG);
-    const route = routes[key];
-    if (route) return route();
     if (key === "GET /runs/r3/companies") return json(200, LATEST_RESULTS);
     if (key === "GET /runs/r2/companies") {
       return json(200, [{ ...result("y1", "c1", "ok", 30), run_id: "r2" }]);
@@ -128,6 +128,21 @@ describe("RunsScreen", () => {
       /^Sat 3 Oct, 07:00 /,
     );
     expect(detail).not.toHaveTextContent(/UTC$/);
+  });
+
+  it("shows run times and 'today' in the configured time zone", async () => {
+    // 17:00Z on 1 Oct is 02:00 on 2 Oct in Tokyo (UTC+9); "now" (10:00Z) is 19:00 there.
+    const late = run("r9", "2026-10-01T17:00:00Z", { jobs_found: 5 });
+    mockApi([late], {
+      "GET /config": () => json(200, { cron: "0 7 * * *", timezone: "Asia/Tokyo" }),
+      "GET /runs/r9/companies": () => json(200, []),
+    });
+    render(<RunsScreen />);
+
+    expect(await screen.findByText(/times in Asia\/Tokyo/)).toBeInTheDocument();
+    const history = screen.getByRole("region", { name: "History" });
+    expect(within(history).getByRole("button", { name: "Today 02:00" })).toBeInTheDocument();
+    expect(within(card("New jobs today")).getByText("5")).toBeInTheDocument();
   });
 
   it("lists the history newest first", async () => {
