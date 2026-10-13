@@ -173,8 +173,11 @@ describe("AccountTab", () => {
     render(<AccountTab />);
 
     await user.click(await screen.findByRole("button", { name: "Export" }));
+    const dialog = screen.getByRole("dialog", { name: "Export your data?" });
+    await user.click(within(dialog).getByRole("button", { name: "Export JSON" }));
 
     await vi.waitFor(() => expect(click).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     const link = click.mock.contexts[0] as HTMLAnchorElement;
     expect(link.download).toMatch(/^job-lighthouse-export-\d{4}-\d{2}-\d{2}\.json$/);
     expect(link.href).toBe("blob:export");
@@ -188,8 +191,35 @@ describe("AccountTab", () => {
     render(<AccountTab />);
 
     await user.click(await screen.findByRole("button", { name: "Export" }));
+    await user.click(screen.getByRole("button", { name: "Export JSON" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong");
+  });
+
+  it("asks before exporting and says what is exported", async () => {
+    mockApi(ACCOUNT);
+    const user = userEvent.setup();
+    render(<AccountTab />);
+
+    await user.click(await screen.findByRole("button", { name: "Export" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Export your data?" });
+    expect(dialog).toHaveTextContent(/all your data/i);
+    expect(dialog).toHaveTextContent(/JSON/);
+  });
+
+  it("downloads nothing on Cancel", async () => {
+    const api = mockApi(ACCOUNT, { "GET /account/export": () => json(200, {}) });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const user = userEvent.setup();
+    render(<AccountTab />);
+
+    await user.click(await screen.findByRole("button", { name: "Export" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(calls(api, "GET /account/export")).toHaveLength(0);
+    expect(click).not.toHaveBeenCalled();
   });
 
   describe("delete account", () => {

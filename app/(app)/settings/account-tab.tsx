@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { exportAccount, getAccount, type Account } from "@/lib/api/account";
+import { getAccount, type Account } from "@/lib/api/account";
 import { toFormErrors } from "@/lib/api/errors";
-import { downloadJson } from "@/lib/download";
 import { hardRedirect } from "@/lib/navigation";
 import { LOGIN_PATH, SIGNUP_PATH } from "@/lib/routes";
 import { clearToken } from "@/lib/session";
 import { CredentialsForm } from "./credentials-form";
 import { DeleteAccountDialog } from "./delete-account-dialog";
+import { ExportAccountDialog } from "./export-account-dialog";
 
 type State =
   | { status: "loading" }
@@ -19,15 +19,10 @@ function errorMessage(err: unknown): string {
   return toFormErrors(err, []).formError ?? "Something went wrong. Please try again.";
 }
 
-function exportFilename(now = new Date()): string {
-  return `job-lighthouse-export-${now.toISOString().slice(0, 10)}.json`;
-}
-
 export function AccountTab() {
   const [state, setState] = useState<State>({ status: "loading" });
   const [banner, setBanner] = useState<string>();
   const [exporting, setExporting] = useState(false);
-  const [exportError, setExportError] = useState<string>();
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -55,18 +50,6 @@ export function AccountTab() {
   function onSaved(next: Account) {
     setState({ status: "ready", account: next });
     setBanner("Account updated.");
-  }
-
-  async function exportData() {
-    setExporting(true);
-    setExportError(undefined);
-    try {
-      downloadJson(await exportAccount(), exportFilename());
-    } catch (err) {
-      setExportError(errorMessage(err));
-    } finally {
-      setExporting(false);
-    }
   }
 
   function endSession(path: string) {
@@ -97,18 +80,12 @@ export function AccountTab() {
           </p>
           <button
             type="button"
-            onClick={exportData}
-            disabled={exporting}
-            className="rounded-md border border-divider px-4 py-2 text-sm font-semibold hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => setExporting(true)}
+            className="rounded-md border border-divider px-4 py-2 text-sm font-semibold hover:bg-surface"
           >
-            {exporting ? "Exporting…" : "Export"}
+            Export
           </button>
         </div>
-        {exportError && (
-          <p role="alert" className="text-sm text-danger">
-            {exportError}
-          </p>
-        )}
       </section>
 
       <section className="flex items-center gap-3 rounded-md border border-danger/40 bg-danger/5 px-4 py-3">
@@ -132,6 +109,8 @@ export function AccountTab() {
       >
         Log out
       </button>
+
+      {exporting && <ExportAccountDialog onClose={() => setExporting(false)} />}
 
       {deleting && (
         <DeleteAccountDialog
