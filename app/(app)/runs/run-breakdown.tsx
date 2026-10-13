@@ -8,6 +8,12 @@ export function needsAttention(result: RunCompanyResult): boolean {
   return result.status === "failed" || (result.status === "ok" && result.jobs_found <= 1);
 }
 
+/** Why a company needs attention, in words. */
+export function attentionReason(result: RunCompanyResult): string {
+  if (result.status === "failed") return result.error ? `Failed — ${result.error}` : "Failed";
+  return `Returned ${plural(result.jobs_found, "job")}`;
+}
+
 /** Healthy rows first, then the ones to look at, then skipped — as in the mockup. */
 function rank(result: RunCompanyResult): number {
   if (result.status === "skipped") return 2;

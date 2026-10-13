@@ -12,7 +12,7 @@ import { Banner, BANNER_DISMISS_MS } from "../banner";
 import { RunConfirmDialog } from "../run-confirm-dialog";
 import { useRuns, withRun } from "../run-context";
 import { isSameUtcDay, plural, startedLabel } from "./format";
-import { needsAttention, RunBreakdown } from "./run-breakdown";
+import { attentionReason, needsAttention, RunBreakdown } from "./run-breakdown";
 
 type State =
   | { status: "loading" }
@@ -28,13 +28,55 @@ function errorMessage(err: unknown): string {
   return toFormErrors(err, []).formError ?? "Something went wrong. Please try again.";
 }
 
-function Card({ kicker, value, detail }: { kicker: string; value: string; detail: string }) {
+const cardClass = "flex flex-col gap-1 rounded-md bg-surface px-4 py-3 text-left";
+
+function CardBody({ kicker, value, detail }: { kicker: string; value: string; detail: string }) {
   return (
-    <div className="flex flex-col gap-1 rounded-md bg-surface px-4 py-3">
+    <>
       <span className="text-xs font-semibold tracking-wide text-muted uppercase">{kicker}</span>
       <span className="font-heading text-2xl">{value}</span>
       <span className="text-xs text-muted">{detail}</span>
+    </>
+  );
+}
+
+function Card(props: { kicker: string; value: string; detail: string }) {
+  return (
+    <div className={cardClass}>
+      <CardBody {...props} />
     </div>
+  );
+}
+
+/** A card that opens the list below it; disabled when there is nothing to open. */
+function CardButton({
+  expanded,
+  disabled,
+  controls,
+  onClick,
+  ...body
+}: {
+  kicker: string;
+  value: string;
+  detail: string;
+  expanded: boolean;
+  disabled: boolean;
+  controls: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-expanded={expanded}
+      aria-controls={controls}
+      disabled={disabled}
+      onClick={onClick}
+      className={`${cardClass} enabled:cursor-pointer enabled:hover:ring-1 enabled:hover:ring-accent disabled:cursor-default ${
+        expanded ? "ring-1 ring-accent" : ""
+      }`}
+    >
+      <CardBody {...body} />
+    </button>
   );
 }
 
@@ -68,7 +110,9 @@ export function RunsScreen() {
   const [selectedId, setSelectedId] = useState<string>();
   const [breakdowns, setBreakdowns] = useState<Record<string, Breakdown>>({});
   const [running, setRunning] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  /** A pending Run now confirm: a Full run, or a Single-company run for `company`. */
+  const [confirming, setConfirming] = useState<{ company?: { id: string; name: string } }>();
+  const [attentionOpen, setAttentionOpen] = useState(false);
   const [banner, setBanner] = useState<string>();
   const [actionError, setActionError] = useState<string>();
   const dismissBanner = useCallback(() => setBanner(undefined), []);
@@ -113,16 +157,17 @@ export function RunsScreen() {
     }
   }, [wanted]);
 
-  async function runNow() {
-    setConfirming(false);
+  async function runNow(company?: { id: string; name: string }) {
+    setConfirming(undefined);
     setRunning(true);
     setBanner(undefined);
     setActionError(undefined);
     try {
-      const run = await trigger();
+      const run = await trigger(company?.id);
       setState((prev) => (prev.status === "ready" ? { ...prev, runs: withRun(prev.runs, run) } : prev));
       setSelectedId(run.id);
-      setBanner(run.status === "running" ? "Run started." : "Run finished.");
+      const target = company ? ` for ${company.name}` : "";
+      setBanner(run.status === "running" ? `Run started${target}.` : `Run finished${target}.`);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) setBanner(ALREADY_RUNNING);
       else setActionError(errorMessage(err));
@@ -152,7 +197,7 @@ export function RunsScreen() {
           </Link>
           <button
             type="button"
-            onClick={() => setConfirming(true)}
+            onClick={() => setConfirming({})}
             disabled={running}
             className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:opacity-60"
           >
@@ -160,7 +205,13 @@ export function RunsScreen() {
           </button>
         </div>
       )}
-      {confirming && <RunConfirmDialog onConfirm={runNow} onClose={() => setConfirming(false)} />}
+      {confirming && (
+        <RunConfirmDialog
+          companyName={confirming.company?.name}
+          onConfirm={() => runNow(confirming.company)}
+          onClose={() => setConfirming(undefined)}
+        />
+      )}
     </div>
   );
 
@@ -184,8 +235,10 @@ export function RunsScreen() {
   const newToday = today.reduce((sum, r) => sum + r.jobs_found, 0);
   const latestResults = latest && breakdowns[latest.id]?.results;
   const scraped = latestResults?.reduce((sum, r) => sum + r.jobs_found, 0);
-  const attention = latestResults?.filter(needsAttention).length;
+  const attentionRows = latestResults?.filter(needsAttention);
+  const attention = attentionRows?.length;
   const companies = new Map(state.companies.map((c) => [c.id, c]));
+  const showAttention = attentionOpen && !!attention;
 
   return (
     <>
@@ -222,12 +275,77 @@ export function RunsScreen() {
               : "No runs yet"
           }
         />
-        <Card
+        <CardButton
           kicker="Need attention"
           value={attention === undefined ? "—" : String(attention)}
           detail="Failed, or returned 0 or 1 jobs"
+          expanded={showAttention}
+          disabled={!attention}
+          controls="need-attention-list"
+          onClick={() => setAttentionOpen((open) => !open)}
         />
       </div>
+
+      {showAttention && attentionRows && (
+        <section
+          id="need-attention-list"
+          aria-label="Need attention"
+          className="rounded-md border border-divider"
+        >
+          <ul className="divide-y divide-divider text-sm">
+            {attentionRows.map((result) => {
+              const company = companies.get(result.company_id);
+              const name = result.company_name || company?.name || "Removed company";
+              return (
+                <li key={result.id} className="flex items-center gap-3 px-4 py-3">
+                  {company ? (
+                    <a
+                      href={company.website_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold underline-offset-2 hover:underline"
+                    >
+                      {name}
+                    </a>
+                  ) : (
+                    <span className="font-semibold">{name}</span>
+                  )}
+                  <span className={`flex-1 ${result.status === "failed" ? "text-danger" : "text-muted"}`}>
+                    {attentionReason(result)}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`Run ${name} now`}
+                    title={
+                      !company
+                        ? "This company was removed"
+                        : company.active
+                          ? "Run now"
+                          : "Resume this company to run it"
+                    }
+                    disabled={!company?.active || running}
+                    onClick={() => company && setConfirming({ company: { id: company.id, name } })}
+                    className="rounded-sm p-1.5 text-muted hover:bg-surface hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      className="size-4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M13 2 4 14h7l-1 8 9-12h-7Z" />
+                    </svg>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       {runs.length === 0 ? (
         <div className="rounded-md border border-dashed border-divider px-6 py-12 text-center">

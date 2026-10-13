@@ -295,3 +295,110 @@ describe("RunsScreen", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("A run is already in progress.");
   });
 });
+
+describe("RunsScreen · Need attention", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"], now: NOW });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  async function attentionCard() {
+    const button = await screen.findByRole("button", { name: /Need attention/ });
+    await vi.waitFor(() => expect(button).toBeEnabled());
+    return button;
+  }
+
+  it("opens an inline list of the companies that need attention, with reasons", async () => {
+    mockApi();
+    const user = userEvent.setup();
+    render(<RunsScreen />);
+
+    const button = await attentionCard();
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    await user.click(button);
+
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    const list = screen.getByRole("region", { name: "Need attention" });
+    expect(within(list).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "NorthstarFailed — selector miss",
+      "FernwellReturned 1 job",
+    ]);
+    expect(within(list).getByRole("link", { name: "Northstar" })).toHaveAttribute(
+      "href",
+      "https://c2.example",
+    );
+  });
+
+  it("collapses again on a second click", async () => {
+    mockApi();
+    const user = userEvent.setup();
+    render(<RunsScreen />);
+
+    const button = await attentionCard();
+    await user.click(button);
+    await user.click(button);
+
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("region", { name: "Need attention" })).not.toBeInTheDocument();
+  });
+
+  it("is disabled when nothing needs attention", async () => {
+    mockApi(RUNS, {
+      "GET /runs/r3/companies": () => json(200, [result("x1", "c1", "ok", 34)]),
+    });
+    render(<RunsScreen />);
+
+    const button = await screen.findByRole("button", { name: /Need attention/ });
+
+    await vi.waitFor(() => expect(button).toHaveTextContent("0"));
+    expect(button).toBeDisabled();
+  });
+
+  it("confirms before a Single-company run, then posts the company id", async () => {
+    const spy = mockApi(RUNS, {
+      "POST /runs": () => json(202, run("r5", "2026-10-02T09:59:00Z", { status: "running", finished_at: null })),
+    });
+    const user = userEvent.setup();
+    render(<RunsScreen />);
+    await user.click(await attentionCard());
+
+    await user.click(screen.getByRole("button", { name: "Run Northstar now" }));
+    const dialog = screen.getByRole("dialog", { name: "Run Northstar now?" });
+    expect(spy.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+    await user.click(within(dialog).getByRole("button", { name: "Start run" }));
+
+    expect(await screen.findByText("Run started for Northstar.")).toBeInTheDocument();
+    const post = spy.mock.calls.find(([, init]) => init?.method === "POST")!;
+    expect(JSON.parse(String(post[1]?.body))).toEqual({ company_id: "c2" });
+  });
+
+  it("starts nothing when the confirm is cancelled", async () => {
+    const spy = mockApi();
+    const user = userEvent.setup();
+    render(<RunsScreen />);
+    await user.click(await attentionCard());
+
+    await user.click(screen.getByRole("button", { name: "Run Northstar now" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+
+    expect(spy.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
+  it("disables Run now for a paused company", async () => {
+    mockApi(RUNS, {
+      "GET /runs/r3/companies": () => json(200, [result("x4", "c4", "ok", 0)]),
+    });
+    const user = userEvent.setup();
+    render(<RunsScreen />);
+    await user.click(await attentionCard());
+
+    const run = screen.getByRole("button", { name: "Run Vela now" });
+    expect(run).toBeDisabled();
+    expect(run).toHaveAttribute("title", "Resume this company to run it");
+  });
+});
+
