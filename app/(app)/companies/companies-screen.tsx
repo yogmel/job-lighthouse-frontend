@@ -31,7 +31,7 @@ import {
 import type { CompanyDefaults } from "./company-fields";
 import { parseSort, sortCompanies, writeSort, type CompanySort } from "./company-sort";
 import { RemoveCompanyDialog } from "./remove-company-dialog";
-import type { RowMenuItem } from "./row-menu";
+import { icons, type RowAction } from "./row-actions";
 
 type State =
   | { status: "loading" }
@@ -74,17 +74,17 @@ function FilteredTable({
   companies,
   sort,
   onSort,
-  menuItems,
+  rowActions,
   onClear,
 }: {
   companies: Company[];
   sort: CompanySort;
   onSort: (sort: CompanySort) => void;
-  menuItems: (company: Company) => RowMenuItem[];
+  rowActions: (company: Company) => RowAction[];
   onClear: () => void;
 }) {
   if (companies.length > 0) {
-    return <CompaniesTable companies={companies} sort={sort} onSort={onSort} menuItems={menuItems} />;
+    return <CompaniesTable companies={companies} sort={sort} onSort={onSort} rowActions={rowActions} />;
   }
   return (
     <div className="rounded-md border border-dashed border-divider px-6 py-12 text-center">
@@ -252,20 +252,43 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
     setBanner(`${company.name} and its jobs removed.`);
   }
 
-  function menuItems(company: Company): RowMenuItem[] {
-    const edit = { label: "Edit company", onSelect: () => setEditing(company) };
-    const remove = { label: "Remove company", onSelect: () => setRemoving(company), danger: true };
+  function rowActions(company: Company): RowAction[] {
+    const { name } = company;
     // Resuming would only make runs fail: there is no handler to call yet.
-    if (needsCustomHandling(company)) return [edit, remove];
+    const noHandler = needsCustomHandling(company);
+    const pausedTip = noHandler
+      ? "Paused until a developer ships a handler for this company"
+      : "Resume this company to run it";
     return [
-      edit,
-      ...(company.active
-        ? [
-            { label: "Run now", onSelect: () => setConfirmingRun(company) },
-            { label: "Pause watching", onSelect: () => setActive(company, false) },
-          ]
-        : [{ label: "Resume watching", onSelect: () => setActive(company, true) }]),
-      remove,
+      { label: `Edit ${name}`, tooltip: "Edit", icon: icons.edit, onClick: () => setEditing(company) },
+      {
+        label: `Run ${name} now`,
+        tooltip: company.active ? "Run now" : pausedTip,
+        icon: icons.run,
+        onClick: () => setConfirmingRun(company),
+        disabled: !company.active,
+      },
+      company.active
+        ? {
+            label: `Pause ${name}`,
+            tooltip: "Pause watching",
+            icon: icons.pause,
+            onClick: () => setActive(company, false),
+          }
+        : {
+            label: `Resume ${name}`,
+            tooltip: noHandler ? pausedTip : "Resume watching",
+            icon: icons.resume,
+            onClick: () => setActive(company, true),
+            disabled: noHandler,
+          },
+      {
+        label: `Remove ${name}`,
+        tooltip: "Remove",
+        icon: icons.remove,
+        onClick: () => setRemoving(company),
+        danger: true,
+      },
     ];
   }
 
@@ -350,7 +373,7 @@ export function CompaniesScreen({ justAdded }: { justAdded?: JustAdded }) {
                 )}
                 sort={sort}
                 onSort={setSort}
-                menuItems={menuItems}
+                rowActions={rowActions}
                 onClear={() => setFilters(DEFAULT_FILTERS)}
               />
             )}

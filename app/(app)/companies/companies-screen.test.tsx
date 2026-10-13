@@ -91,6 +91,12 @@ function sentBody(spy: ReturnType<typeof mockApi>, key: string): unknown {
   return call ? JSON.parse(String(call[1]?.body)) : undefined;
 }
 
+async function clickRunNow(name: string) {
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: `Run ${name} now` }));
+  return user;
+}
+
 describe("CompaniesScreen", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -293,10 +299,7 @@ describe("CompaniesScreen · edit company", () => {
 
   async function openEdit(name: string) {
     const user = userEvent.setup();
-    await user.click(
-      await screen.findByRole("button", { name: `Actions for ${name}` }),
-    );
-    await user.click(screen.getByRole("menuitem", { name: "Edit company" }));
+    await user.click(await screen.findByRole("button", { name: `Edit ${name}` }));
     return {
       user,
       dialog: screen.getByRole("dialog", { name: `Edit ${name}` }),
@@ -393,17 +396,51 @@ describe("CompaniesScreen · edit company", () => {
   });
 });
 
+describe("CompaniesScreen · row action icons", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("gives every row icon a name and a tooltip, and no menu", async () => {
+    mockApi([HALDEN]);
+    render(<CompaniesScreen />);
+
+    const row = (await screen.findByText("Halden")).closest("tr")!;
+    const tooltips = within(row)
+      .getAllByRole("button")
+      .map((b) => [b.getAttribute("aria-label"), b.getAttribute("title")]);
+    expect(tooltips).toEqual([
+      ["Edit Halden", "Edit"],
+      ["Run Halden now", "Run now"],
+      ["Pause Halden", "Pause watching"],
+      ["Remove Halden", "Remove"],
+    ]);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("swaps Pause for Resume once paused", async () => {
+    mockApi([NORTHSTAR]);
+    render(<CompaniesScreen />);
+
+    expect(await screen.findByRole("button", { name: "Resume Northstar" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Pause Northstar" })).not.toBeInTheDocument();
+  });
+});
+
 describe("CompaniesScreen · pause and remove", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
+  const ACTION_LABELS: Record<string, (name: string) => string> = {
+    "Pause watching": (name) => `Pause ${name}`,
+    "Resume watching": (name) => `Resume ${name}`,
+    "Remove company": (name) => `Remove ${name}`,
+  };
+
   async function chooseAction(name: string, action: string) {
     const user = userEvent.setup();
-    await user.click(
-      await screen.findByRole("button", { name: `Actions for ${name}` }),
-    );
-    await user.click(screen.getByRole("menuitem", { name: action }));
+    await user.click(await screen.findByRole("button", { name: ACTION_LABELS[action](name) }));
     return user;
   }
 
@@ -461,22 +498,13 @@ describe("CompaniesScreen · pause and remove", () => {
   it("keeps a company that needs custom handling paused", async () => {
     mockFetch(200, [ORBIT]);
     render(<CompaniesScreen />);
-    const user = userEvent.setup();
 
-    await user.click(
-      await screen.findByRole("button", { name: "Actions for Orbit" }),
-    );
-
-    const menu = screen.getByRole("menu", { name: "Orbit" });
-    expect(
-      within(menu).queryByRole("menuitem", { name: "Resume watching" }),
-    ).not.toBeInTheDocument();
-    expect(
-      within(menu).getByRole("menuitem", { name: "Edit company" }),
-    ).toBeInTheDocument();
-    expect(
-      within(menu).getByRole("menuitem", { name: "Remove company" }),
-    ).toBeInTheDocument();
+    const resume = await screen.findByRole("button", { name: "Resume Orbit" });
+    expect(resume).toBeDisabled();
+    expect(resume).toHaveAttribute("title", expect.stringMatching(/developer ships a handler/));
+    expect(screen.getByRole("button", { name: "Run Orbit now" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Edit Orbit" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Remove Orbit" })).toBeEnabled();
   });
 
   it("treats an active custom company as a normal row", async () => {
@@ -640,41 +668,21 @@ describe("CompaniesScreen Run now", () => {
     error: null,
   };
 
-  async function openMenu(name: string) {
-    const user = userEvent.setup();
-    await user.click(
-      await screen.findByRole("button", { name: `Actions for ${name}` }),
-    );
-    return user;
-  }
-
-  it("offers Run now for active companies only", async () => {
+  it("enables Run now for active companies only, with a tooltip on the paused one", async () => {
     mockApi([HALDEN, NORTHSTAR]);
     render(<CompaniesScreen />);
 
-    await openMenu("Halden");
-    expect(
-      screen.getByRole("menuitem", { name: "Run now" }),
-    ).toBeInTheDocument();
-
-    const user = userEvent.setup();
-    await user.click(
-      screen.getByRole("button", { name: "Actions for Northstar" }),
-    );
-    expect(
-      within(screen.getByRole("menu", { name: "Northstar" })).queryByRole(
-        "menuitem",
-        { name: "Run now" },
-      ),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Run Halden now" })).toBeEnabled();
+    const paused = screen.getByRole("button", { name: "Run Northstar now" });
+    expect(paused).toBeDisabled();
+    expect(paused).toHaveAttribute("title", "Resume this company to run it");
   });
 
   it("posts the company id and confirms the start", async () => {
     const spy = mockApi([HALDEN], { "POST /runs": () => json(202, started) });
     render(<CompaniesScreen />);
 
-    const user = await openMenu("Halden");
-    await user.click(screen.getByRole("menuitem", { name: "Run now" }));
+    const user = await clickRunNow("Halden");
     await user.click(screen.getByRole("button", { name: "Start run" }));
 
     expect(
@@ -687,8 +695,7 @@ describe("CompaniesScreen Run now", () => {
     const spy = mockApi([HALDEN], { "POST /runs": () => json(202, started) });
     render(<CompaniesScreen />);
 
-    const user = await openMenu("Halden");
-    await user.click(screen.getByRole("menuitem", { name: "Run now" }));
+    const user = await clickRunNow("Halden");
     const dialog = screen.getByRole("dialog", { name: "Run Halden now?" });
     expect(dialog).toHaveTextContent("This checks Halden");
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
@@ -705,8 +712,7 @@ describe("CompaniesScreen Run now", () => {
     mockApi([HALDEN], { "POST /runs": () => json(status, { detail }) });
     render(<CompaniesScreen />);
 
-    const user = await openMenu("Halden");
-    await user.click(screen.getByRole("menuitem", { name: "Run now" }));
+    const user = await clickRunNow("Halden");
     await user.click(screen.getByRole("button", { name: "Start run" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(detail);
@@ -742,11 +748,7 @@ describe("CompaniesScreen links and banners", () => {
     });
     render(<CompaniesScreen />);
 
-    const user = userEvent.setup();
-    await user.click(
-      await screen.findByRole("button", { name: "Actions for Halden" }),
-    );
-    await user.click(screen.getByRole("menuitem", { name: "Run now" }));
+    const user = await clickRunNow("Halden");
     await user.click(screen.getByRole("button", { name: "Start run" }));
     expect(
       await screen.findByText("Run started for Halden."),
@@ -891,8 +893,7 @@ describe("CompaniesScreen filters", () => {
     expect(await screen.findByRole("table")).toBeInTheDocument();
     expect(names()).toEqual(["Lumen"]);
 
-    await user.click(screen.getByRole("button", { name: "Actions for Lumen" }));
-    await user.click(screen.getByRole("menuitem", { name: "Run now" }));
+    await user.click(screen.getByRole("button", { name: "Run Lumen now" }));
 
     expect(await screen.findByText("No companies match these filters")).toBeInTheDocument();
     expect(spy.mock.calls.filter(([input]) => String(input).endsWith("/runs/r2/companies"))).toHaveLength(1);
