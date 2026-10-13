@@ -93,6 +93,8 @@ export function ProfileTab() {
     } catch (err) {
       const errors = toFormErrors(err, FIELDS);
       setFieldError(errors.fieldErrors.profile);
+      // The error belongs to the textarea, so bring it back.
+      if (errors.fieldErrors.profile) setMode("write");
       setFormError(errors.formError);
     } finally {
       setSaving(false);

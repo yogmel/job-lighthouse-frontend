@@ -98,6 +98,22 @@ describe("ProfileTab", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
+  it("returns to Write when saving from Preview hits a field error", async () => {
+    mockApi(() =>
+      json(422, { detail: [{ loc: ["body", "profile"], msg: "Profile is too long" }] }),
+    );
+    const user = userEvent.setup();
+    render(<ProfileTab />);
+
+    await user.type(await screen.findByLabelText("Profile markdown"), " More.");
+    await user.click(screen.getByRole("tab", { name: "Preview" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("Profile is too long")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Write" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByLabelText("Profile markdown")).toHaveAttribute("aria-invalid", "true");
+  });
+
   it("shows a form error when saving fails", async () => {
     mockApi(() => json(500, { detail: "boom" }));
     const user = userEvent.setup();
