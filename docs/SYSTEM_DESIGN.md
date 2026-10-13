@@ -362,7 +362,7 @@ location?: string;
 | `PUT`    | `/companies/{id}`             | modify company                                           |
 | `DELETE` | `/companies/{id}`             | delete company and its jobs (204 / 404 / 409 while a run is in progress) |
 | `POST`   | `/companies/{id}/test`        | re-test a company's source; report reachability/count    |
-| `GET`    | `/jobs`                       | one page of jobs (`limit`, `cursor`, filters `company_id`, `tier`, `active`); `X-Next-Cursor` while more remain; first page also sends `X-Total-Count` of the filtered set |
+| `GET`    | `/jobs`                       | one page of jobs (`limit`, `cursor`, filters `company_id`, `tier`, `active`); `X-Next-Cursor` while more remain; first page also sends `X-Total-Count` of the filtered set and `X-Tier-Counts` (JSON, tier → count, e.g. `{"1":12,"2":5}`) |
 | `GET`    | `/config`                     | fetch configuration                                      |
 | `PUT`    | `/config`                     | modify configuration                                     |
 | `POST`   | `/runs`                       | trigger a run now (manual); optional `{ company_id }` for a Single-company run (404 / 409 paused / 409 run in progress) |
@@ -669,6 +669,8 @@ Notable UI-driven details already folded into the schema/API above:
   run; already-scored jobs keep their score")
 - Changing a company's tier re-groups its jobs in the UI — no schema
   implication, purely a client-side grouping key
+- Jobs tier groups are collapsible: the header shows the tier's exact count
+  from `X-Tier-Counts`; collapsed tiers are saved in `localStorage`
 - Row-level "0 jobs last run" / "fetch failed" flags read from
   `RunCompanyResult`
 

@@ -149,7 +149,7 @@ function mockApi(
 
 /** Serves `GET /jobs` pages by cursor ("" = first page); `next` becomes `X-Next-Cursor`. */
 function mockPages(
-  pages: Record<string, { jobs: Job[]; next?: string; total?: number }>,
+  pages: Record<string, { jobs: Job[]; next?: string; total?: number; tierCounts?: Record<string, number> }>,
   companies: Company[],
 ) {
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -163,6 +163,7 @@ function mockPages(
         "Content-Type": "application/json",
         ...(page.next && { "X-Next-Cursor": page.next }),
         ...(page.total !== undefined && { "X-Total-Count": String(page.total) }),
+        ...(page.tierCounts && { "X-Tier-Counts": JSON.stringify(page.tierCounts) }),
       },
     });
   });
@@ -570,6 +571,105 @@ describe("JobsScreen · total", () => {
       expect(screen.queryByText(/ of /)).not.toBeInTheDocument();
     },
   );
+});
+
+describe("JobsScreen · tier groups", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  const pages = { "": { jobs: [FRONTEND, PLATFORM], total: 20, tierCounts: { "1": 12, "3": 8 } } };
+
+  it("shows the server's per-tier total on each header, all expanded by default", async () => {
+    mockPages(pages, [HALDEN, NORTHSTAR]);
+    render(<JobsScreen />);
+
+    const tier1 = await screen.findByRole("button", { name: /Tier 1/ });
+    expect(tier1).toHaveTextContent("Tier 1 · 12 jobs");
+    expect(tier1).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: /Tier 3/ })).toHaveTextContent("Tier 3 · 8 jobs");
+    expect(screen.getByText("Frontend Engineer")).toBeInTheDocument();
+    expect(screen.getByText("Platform Engineer")).toBeInTheDocument();
+  });
+
+  it("falls back to the loaded count when the server sends no tier counts", async () => {
+    mockPages({ "": { jobs: [FRONTEND] } }, [HALDEN]);
+    render(<JobsScreen />);
+
+    expect(await screen.findByRole("button", { name: /Tier 1/ })).toHaveTextContent("Tier 1 · 1 job");
+  });
+
+  it("collapses and expands a group on click, leaving the others alone", async () => {
+    mockPages(pages, [HALDEN, NORTHSTAR]);
+    const user = userEvent.setup();
+    render(<JobsScreen />);
+
+    const tier1 = await screen.findByRole("button", { name: /Tier 1/ });
+    await user.click(tier1);
+    expect(tier1).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Frontend Engineer")).not.toBeInTheDocument();
+    expect(screen.getByText("Platform Engineer")).toBeInTheDocument();
+
+    await user.click(tier1);
+    expect(tier1).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Frontend Engineer")).toBeInTheDocument();
+  });
+
+  it("remembers collapsed groups in this browser", async () => {
+    mockPages(pages, [HALDEN, NORTHSTAR]);
+    const user = userEvent.setup();
+    const first = render(<JobsScreen />);
+    await user.click(await screen.findByRole("button", { name: /Tier 1/ }));
+    first.unmount();
+
+    render(<JobsScreen />);
+    expect(await screen.findByRole("button", { name: /Tier 1/ })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: /Tier 3/ })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("still collapses when storage is blocked", async () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => {
+        throw new Error("blocked");
+      },
+      setItem: () => {
+        throw new Error("blocked");
+      },
+    });
+    mockPages(pages, [HALDEN, NORTHSTAR]);
+    const user = userEvent.setup();
+    render(<JobsScreen />);
+
+    const tier1 = await screen.findByRole("button", { name: /Tier 1/ });
+    await user.click(tier1);
+    expect(tier1).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("re-groups a job under its company's new tier", async () => {
+    const moved = { ...HALDEN, tier: 3 };
+    let companies = [HALDEN, NORTHSTAR];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/companies") return json(200, companies);
+      return json(200, [FRONTEND, PLATFORM]);
+    });
+    const user = userEvent.setup();
+    render(<JobsScreen />);
+    expect(await screen.findByRole("region", { name: "Tier 1" })).toBeInTheDocument();
+
+    companies = [moved, NORTHSTAR];
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+
+    await screen.findByText("Frontend Engineer");
+    expect(screen.queryByRole("region", { name: "Tier 1" })).not.toBeInTheDocument();
+    const tier3 = screen.getByRole("region", { name: "Tier 3" });
+    expect(within(tier3).getByText("Frontend Engineer")).toBeInTheDocument();
+    expect(within(tier3).getByText("Platform Engineer")).toBeInTheDocument();
+  });
 });
 
 describe("JobsScreen · runs", () => {
