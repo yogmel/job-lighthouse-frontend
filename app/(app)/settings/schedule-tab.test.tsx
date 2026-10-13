@@ -4,6 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Config } from "@/lib/api/config";
 import { ScheduleTab } from "./schedule-tab";
 
+const zone = vi.hoisted(() => ({ browser: "UTC" }));
+
+vi.mock("@/lib/cron", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/cron")>()),
+  browserTimeZone: () => zone.browser,
+}));
+
 const CONFIG: Config = {
   id: "cfg1",
   user_id: "u1",
@@ -11,6 +18,7 @@ const CONFIG: Config = {
   keywords_exclude: ["intern"],
   location: "Berlin",
   cron: "0 7 * * *",
+  timezone: "UTC",
   profile: "# Profile",
   profile_version: 3,
 };
@@ -45,6 +53,7 @@ describe("ScheduleTab", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    zone.browser = "UTC";
   });
 
   it("loads the saved schedule as a preset and estimates the next run", async () => {
@@ -92,6 +101,7 @@ describe("ScheduleTab", () => {
       keywords_exclude: ["intern"],
       location: "Berlin",
       cron: "0 7 * * 1-5",
+      timezone: "UTC",
       profile: "# Profile",
     });
     expect(freq("Weekdays")).toBeChecked();
@@ -167,4 +177,97 @@ describe("ScheduleTab", () => {
       "Something went wrong. Please try again.",
     );
   });
+
+  it("evaluates the cron in the saved time zone", async () => {
+    // 09:00 in Berlin (UTC+2 in October) is 07:00Z, two hours after the mocked now.
+    mockApi({ ...CONFIG, cron: "0 9 * * *", timezone: "Europe/Berlin" });
+    render(<ScheduleTab />);
+
+    expect(await screen.findByLabelText("Time zone")).toHaveValue("Europe/Berlin");
+    expect(screen.getByLabelText("Time (Europe/Berlin)")).toHaveValue("09:00");
+    expect(nextRun()).toMatch(/^Next run Fri 2 Oct, 09:00 \S+ — about 2h from now\.$/);
+  });
+
+  it("re-evaluates the next run and saves timezone with PUT /config", async () => {
+    const put = vi.fn((body: unknown) => json(200, { ...CONFIG, ...(body as object) }));
+    mockApi(CONFIG, put);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<ScheduleTab />);
+
+    const input = await screen.findByLabelText("Time zone");
+    await user.clear(input);
+    await user.type(input, "Asia/Kolkata");
+    // 07:00 in India (UTC+5:30) already passed at 05:00Z, so the next one is tomorrow.
+    expect(nextRun()).toMatch(/^Next run Sat 3 Oct, 07:00 \S+/);
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Schedule saved");
+    expect(put).toHaveBeenCalledWith(expect.objectContaining({ cron: "0 7 * * *", timezone: "Asia/Kolkata" }));
+  });
+
+  it("lists IANA zones to search", async () => {
+    mockApi();
+    const { container } = render(<ScheduleTab />);
+
+    await screen.findByLabelText("Time zone");
+
+    const options = [...container.querySelectorAll("#schedule-timezones option")].map(
+      (o) => (o as HTMLOptionElement).value,
+    );
+    expect(options).toContain("Europe/Berlin");
+    expect(options).toContain("UTC");
+  });
+
+  it("suggests the browser's zone while Config is still UTC, without applying it", async () => {
+    zone.browser = "Europe/Berlin";
+    mockApi();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<ScheduleTab />);
+
+    const use = await screen.findByRole("button", { name: "Use Europe/Berlin" });
+    expect(screen.getByLabelText("Time zone")).toHaveValue("UTC");
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    await user.click(use);
+
+    expect(screen.getByLabelText("Time zone")).toHaveValue("Europe/Berlin");
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: /^Use / })).not.toBeInTheDocument();
+  });
+
+  it("makes no suggestion once a zone is saved", async () => {
+    zone.browser = "Europe/Berlin";
+    mockApi({ ...CONFIG, timezone: "Asia/Kolkata" });
+    render(<ScheduleTab />);
+
+    await screen.findByLabelText("Time zone");
+    expect(screen.queryByRole("button", { name: /^Use / })).not.toBeInTheDocument();
+  });
+
+  it("rejects an unknown zone and blocks Save", async () => {
+    mockApi();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<ScheduleTab />);
+
+    const input = await screen.findByLabelText("Time zone");
+    await user.clear(input);
+    await user.type(input, "Mars/Olympus");
+
+    expect(screen.getByText(/Pick a time zone from the list/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(nextRun()).toMatch(/Next run —/);
+  });
+
+  it("shows the server's message when it refuses the zone", async () => {
+    mockApi(CONFIG, () => json(422, { detail: [{ loc: ["body", "timezone"], msg: "unknown time zone" }] }));
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<ScheduleTab />);
+
+    const input = await screen.findByLabelText("Time zone");
+    await user.clear(input);
+    await user.type(input, "Asia/Kolkata");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText(/unknown time zone/i)).toBeInTheDocument();
+  });
 });
+

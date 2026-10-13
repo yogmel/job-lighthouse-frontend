@@ -7,7 +7,7 @@ import { listCompanies, type Company } from "@/lib/api/companies";
 import { getConfig } from "@/lib/api/config";
 import { toFormErrors } from "@/lib/api/errors";
 import { listRunCompanies, listRuns, type Run, type RunCompanyResult } from "@/lib/api/runs";
-import { formatUtc, nextCronRun, untilLabel } from "@/lib/cron";
+import { formatInZone, nextCronRun, untilLabel } from "@/lib/cron";
 import { Banner, BANNER_DISMISS_MS } from "../banner";
 import { RunConfirmDialog } from "../run-confirm-dialog";
 import { useRuns, withRun } from "../run-context";
@@ -17,7 +17,7 @@ import { attentionReason, needsAttention, RunBreakdown } from "./run-breakdown";
 type State =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "ready"; runs: Run[]; companies: Company[]; cron: string };
+  | { status: "ready"; runs: Run[]; companies: Company[]; cron: string; timezone: string };
 
 /** Per-run breakdown, fetched on first view. */
 type Breakdown = { results?: RunCompanyResult[]; error?: string };
@@ -126,7 +126,7 @@ export function RunsScreen() {
     Promise.all([listRuns(), listCompanies(), getConfig()]).then(
       ([runs, companies, config]) =>
         !cancelled &&
-        setState({ status: "ready", runs, companies, cron: config.cron }),
+        setState({ status: "ready", runs, companies, cron: config.cron, timezone: config.timezone || "UTC" }),
       (err: unknown) => !cancelled && setState({ status: "error", message: errorMessage(err) }),
     );
     return () => {
@@ -230,7 +230,7 @@ export function RunsScreen() {
     );
   }
 
-  const next = nextCronRun(state.cron, now);
+  const next = nextCronRun(state.cron, now, state.timezone);
   const today = runs.filter((r) => isSameUtcDay(new Date(r.started_at), now));
   const newToday = today.reduce((sum, r) => sum + r.jobs_found, 0);
   const latestResults = latest && breakdowns[latest.id]?.results;
@@ -259,7 +259,7 @@ export function RunsScreen() {
         <Card
           kicker="Next run"
           value={next ? untilLabel(next.getTime() - now.getTime()).replace("about ", "") : "—"}
-          detail={next ? formatUtc(next) : "No valid schedule"}
+          detail={next ? formatInZone(next, state.timezone) : "No valid schedule"}
         />
         <Card
           kicker="New jobs today"

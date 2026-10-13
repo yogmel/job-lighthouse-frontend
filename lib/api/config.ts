@@ -7,8 +7,10 @@ export type Config = {
   /** Word-boundary matched, applied at scrape time. */
   keywords_exclude: string[];
   location: string;
-  /** Cron expression. */
+  /** Cron expression, evaluated in `timezone`. */
   cron: string;
+  /** IANA zone name the cron runs in; `UTC` unless changed. */
+  timezone: string;
   /** Markdown the scorer reads to rate each posting. */
   profile: string;
   /** Bumped by the backend on every profile edit. */
@@ -37,6 +39,7 @@ export type ConfigInput = Pick<
   | "keywords_exclude"
   | "location"
   | "cron"
+  | "timezone"
   | "profile"
   | "notify_email"
   | "notify_empty_company"
@@ -60,6 +63,7 @@ export function toConfigInput({
   keywords_exclude,
   location,
   cron,
+  timezone,
   profile,
   notify_email,
   notify_empty_company,
@@ -70,6 +74,7 @@ export function toConfigInput({
     keywords_exclude,
     location,
     cron,
+    timezone,
     profile,
     notify_email,
     notify_empty_company,

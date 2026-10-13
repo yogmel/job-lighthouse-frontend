@@ -11,6 +11,7 @@ const CONFIG: Config = {
   keywords_exclude: ["intern"],
   location: "Berlin",
   cron: "0 7 * * *",
+  timezone: "UTC",
   profile: "# Profile\nFrontend engineer.",
   profile_version: 3,
 };
@@ -67,6 +68,7 @@ describe("ProfileTab", () => {
       keywords_exclude: ["intern"],
       location: "Berlin",
       cron: "0 7 * * *",
+      timezone: "UTC",
       profile: "# Profile\nDesign engineer.",
     });
     expect(screen.getByText("Version 4")).toBeInTheDocument();

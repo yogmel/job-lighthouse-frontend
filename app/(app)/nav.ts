@@ -28,8 +28,13 @@ export function activeTab(pathname: string, settingsTab: string | null): TabId |
  * "Last run today 07:04 · next in 4h 12m", "Running…", "No runs yet · next in 25m".
  * `runs` in any order; `cron` undefined (or invalid) drops the "next in" part.
  */
-export function runStatusText(runs: Run[], cron: string | undefined, now: Date): string {
-  const next = cron ? nextCronRun(cron, now) : null;
+export function runStatusText(
+  runs: Run[],
+  cron: string | undefined,
+  now: Date,
+  timeZone?: string,
+): string {
+  const next = cron ? nextCronRun(cron, now, timeZone) : null;
   const nextPart = next ? ` · next in ${untilLabel(next.getTime() - now.getTime()).replace("about ", "")}` : "";
 
   const latest = runs.reduce<Run | undefined>(

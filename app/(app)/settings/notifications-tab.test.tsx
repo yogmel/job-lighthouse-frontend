@@ -11,6 +11,7 @@ const CONFIG: Config = {
   keywords_exclude: ["intern"],
   location: "Berlin",
   cron: "0 7 * * *",
+  timezone: "UTC",
   profile: "# Profile",
   profile_version: 3,
 };
@@ -67,6 +68,7 @@ describe("NotificationsTab", () => {
       keywords_exclude: ["intern"],
       location: "Berlin",
       cron: "0 7 * * *",
+      timezone: "UTC",
       profile: "# Profile",
       notify_email: false,
       notify_empty_company: true,
