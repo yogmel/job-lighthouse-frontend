@@ -24,6 +24,8 @@ type Loaded = {
   nextCursor: string | null;
   /** Match count from the first page; kept while paging, null if the backend didn't send it. */
   total: number | null;
+  /** Per-tier match counts from the first page; kept while paging, null if the backend didn't send them. */
+  tierCounts: Record<string, number> | null;
 };
 
 function errorMessage(err: unknown): string {
@@ -96,7 +98,13 @@ export function JobsScreen() {
     listJobs(filtersToQuery(filters)).then(
       (page) => {
         if (cancelled) return;
-        setLoaded({ key: filtersKey, jobs: page.jobs, nextCursor: page.nextCursor, total: page.total });
+        setLoaded({
+          key: filtersKey,
+          jobs: page.jobs,
+          nextCursor: page.nextCursor,
+          total: page.total,
+          tierCounts: page.tierCounts,
+        });
         setLoadError(undefined);
         setMoreError(undefined);
       },
@@ -118,7 +126,7 @@ export function JobsScreen() {
       (page) =>
         !cancelled &&
         currentKey.current === key &&
-        setLoaded({ key, jobs: page.jobs, nextCursor: page.nextCursor, total: page.total }),
+        setLoaded({ key, jobs: page.jobs, nextCursor: page.nextCursor, total: page.total, tierCounts: page.tierCounts }),
       () => {},
     );
     return () => {
@@ -136,7 +144,7 @@ export function JobsScreen() {
       const [page, list] = await Promise.all([listJobs(filtersToQuery(filters)), listCompanies()]);
       setCompanies(list);
       if (currentKey.current === key) {
-        setLoaded({ key, jobs: page.jobs, nextCursor: page.nextCursor, total: page.total });
+        setLoaded({ key, jobs: page.jobs, nextCursor: page.nextCursor, total: page.total, tierCounts: page.tierCounts });
         setMoreError(undefined);
       }
     } catch (err) {
@@ -262,7 +270,7 @@ export function JobsScreen() {
                 </div>
               )
             ) : (
-              <JobsList jobs={rows} />
+              <JobsList jobs={rows} tierCounts={loaded?.tierCounts ?? null} />
             )}
             {moreError && (
               <p role="alert" className="text-sm text-danger">

@@ -30,7 +30,26 @@ export type JobsPage = {
   nextCursor: string | null;
   /** From `X-Total-Count`; only the first page sends it, so null on later pages or if absent. */
   total: number | null;
+  /** From `X-Tier-Counts` (tier → matching jobs); first page only, null on later pages or if absent. */
+  tierCounts: Record<string, number> | null;
 };
+
+/** Parses `{"1":12,"2":5}`; anything else is treated as absent. */
+function parseTierCounts(header: string | null): Record<string, number> | null {
+  if (!header) return null;
+  try {
+    const parsed: unknown = JSON.parse(header);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+    const counts: Record<string, number> = {};
+    for (const [tier, count] of Object.entries(parsed)) {
+      if (typeof count !== "number" || !Number.isFinite(count) || count < 0) return null;
+      counts[tier] = count;
+    }
+    return counts;
+  } catch {
+    return null;
+  }
+}
 
 export type JobsQuery = {
   companyId?: string;
@@ -57,5 +76,6 @@ export async function listJobs(query: JobsQuery = {}, cursor?: string | null): P
     jobs: data,
     nextCursor: headers.get("X-Next-Cursor"),
     total: Number.isFinite(total) && total >= 0 ? total : null,
+    tierCounts: parseTierCounts(headers.get("X-Tier-Counts")),
   };
 }
