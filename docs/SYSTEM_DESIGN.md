@@ -280,7 +280,8 @@ run_id: string; // FK -> Runs.id
 company_id: string; // FK -> Companies.id
 company_name: string; // stored name; survives the Company being deleted
 status: "ok" | "failed" | "skipped";
-jobs_found: number;
+jobs_found: number; // postings scraped this run
+new_jobs: number; // jobs first stored by this run; sums to Runs.jobs_found
 error: string | null;
 ```
 

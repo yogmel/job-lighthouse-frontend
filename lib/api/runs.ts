@@ -41,7 +41,10 @@ export type RunCompanyResult = {
   company_name: string;
   /** `skipped`: not fetched this run (e.g. paused). */
   status: "ok" | "failed" | "skipped";
+  /** Postings scraped this run, whether or not they were new. */
   jobs_found: number;
+  /** New jobs: stored for the first time by this run. Sums to `Run.jobs_found`. */
+  new_jobs: number;
   error: string | null;
 };
 

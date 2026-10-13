@@ -27,7 +27,9 @@ function Dot({ result }: { result: RunCompanyResult }) {
 function describe(result: RunCompanyResult, company: Company | undefined): string {
   const parts = [result.company_name || company?.name || "Removed company"];
   if (company) parts.push(sourceLabel(company.source));
-  if (result.status !== "skipped") parts.push(plural(result.jobs_found, "job"));
+  if (result.status !== "skipped") {
+    parts.push(plural(result.new_jobs, "new job"), `${result.jobs_found.toLocaleString("en-GB")} scraped`);
+  }
   if (result.status === "ok" && result.jobs_found <= 1 && !result.error) parts.push("likely partial");
   if (result.error) parts.push(result.error);
   return parts.join(" · ");
@@ -55,6 +57,10 @@ export function RunBreakdown({ run, now, companies, results, error }: Props) {
       aria-label="Per-company breakdown"
       className="flex flex-col gap-3 rounded-md border border-divider p-4"
     >
+      {/* Leads with the run's new jobs; the rows below split them by company. */}
+      {run.status !== "running" && (
+        <p className="font-heading text-2xl">{plural(run.jobs_found, "new job")}</p>
+      )}
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="font-semibold">{startedLabel(run.started_at, now)}</h2>
         <span className="text-xs text-muted">{meta.join(" · ")}</span>
