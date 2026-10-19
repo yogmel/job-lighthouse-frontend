@@ -9,7 +9,7 @@ type State =
   | { status: "error"; message: string }
   | { status: "ready"; config: Config };
 
-const FIELDS = ["keywords_include", "keywords_exclude", "location"] as const;
+const FIELDS = ["keywords_include", "keywords_exclude", "locations"] as const;
 
 type Draft = { include: string; exclude: string; location: string };
 
@@ -17,7 +17,7 @@ function errorMessage(err: unknown): string {
   return toFormErrors(err, []).formError ?? "Something went wrong. Please try again.";
 }
 
-/** Keywords are edited as one comma-separated line. */
+/** Keywords and locations are edited as one comma-separated line. */
 export function parseKeywords(text: string): string[] {
   const seen = new Set<string>();
   for (const part of text.split(",")) {
@@ -31,7 +31,7 @@ function toDraft(config: Config): Draft {
   return {
     include: config.keywords_include.join(", "),
     exclude: config.keywords_exclude.join(", "),
-    location: config.location,
+    location: config.locations.join(", "),
   };
 }
 
@@ -74,12 +74,12 @@ export function FiltersTab() {
   const next = {
     keywords_include: parseKeywords(draft.include),
     keywords_exclude: parseKeywords(draft.exclude),
-    location: draft.location.trim(),
+    locations: parseKeywords(draft.location),
   };
   const dirty =
     next.keywords_include.join("\n") !== config.keywords_include.join("\n") ||
     next.keywords_exclude.join("\n") !== config.keywords_exclude.join("\n") ||
-    next.location !== config.location;
+    next.locations.join("\n") !== config.locations.join("\n");
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -176,7 +176,13 @@ export function FiltersTab() {
         "Comma-separated. Whole words only, so “intern” won’t drop “Internal Tools”.",
         "intern, junior",
       )}
-      {field("location", "location", "Location", "Postings in other places are dropped.", "Berlin")}
+      {field(
+        "location",
+        "locations",
+        "Location",
+        "Comma-separated. A job is kept if its location contains any of these. Add Remote to keep remote jobs.",
+        "Berlin, Remote, Germany",
+      )}
 
       <div className="flex items-center gap-3 rounded-md border border-divider px-4 py-3">
         <span className="flex-1 text-sm text-muted">
