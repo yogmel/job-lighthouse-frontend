@@ -6,7 +6,11 @@ export type Config = {
   keywords_include: string[];
   /** Word-boundary matched, applied at scrape time. */
   keywords_exclude: string[];
-  location: string;
+  /**
+   * A job passes if its location contains any entry (case-insensitive
+   * substring). Empty keeps everything. Remote jobs need `Remote` listed.
+   */
+  locations: string[];
   /** Cron expression, evaluated in `timezone`. */
   cron: string;
   /** IANA zone name the cron runs in; `UTC` unless changed. */
@@ -37,7 +41,7 @@ export type ConfigInput = Pick<
   Config,
   | "keywords_include"
   | "keywords_exclude"
-  | "location"
+  | "locations"
   | "cron"
   | "timezone"
   | "profile"
@@ -61,7 +65,7 @@ export function updateConfig(input: ConfigInput): Promise<Config> {
 export function toConfigInput({
   keywords_include,
   keywords_exclude,
-  location,
+  locations,
   cron,
   timezone,
   profile,
@@ -72,7 +76,7 @@ export function toConfigInput({
   return {
     keywords_include,
     keywords_exclude,
-    location,
+    locations,
     cron,
     timezone,
     profile,

@@ -9,7 +9,7 @@ const CONFIG: Config = {
   user_id: "u1",
   keywords_include: ["frontend", "react"],
   keywords_exclude: ["intern"],
-  location: "Berlin",
+  locations: ["Berlin", "Remote"],
   cron: "0 7 * * *",
   timezone: "UTC",
   profile: "# Profile",
@@ -44,14 +44,70 @@ describe("FiltersTab", () => {
     vi.restoreAllMocks();
   });
 
-  it("loads include, exclude and location", async () => {
+  it("loads include, exclude and locations", async () => {
     mockApi();
     render(<FiltersTab />);
 
     expect(await screen.findByLabelText("Keywords to include")).toHaveValue("frontend, react");
     expect(screen.getByLabelText("Keywords to exclude")).toHaveValue("intern");
-    expect(screen.getByLabelText("Location")).toHaveValue("Berlin");
+    expect(screen.getByLabelText("Location")).toHaveValue("Berlin, Remote");
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it("explains the any-match rule and that remote jobs need Remote", async () => {
+    mockApi();
+    render(<FiltersTab />);
+
+    const location = await screen.findByLabelText("Location");
+    expect(location).toHaveAccessibleDescription(
+      "Comma-separated. A job is kept if its location contains any of these. Add Remote to keep remote jobs.",
+    );
+    expect(location).toHaveAttribute("placeholder", "Berlin, Remote, Germany");
+  });
+
+  it("saves locations as a trimmed list without blanks and never sends location", async () => {
+    const put = vi.fn((body: unknown) => json(200, { ...CONFIG, ...(body as object) }));
+    mockApi(put);
+    const user = userEvent.setup();
+    render(<FiltersTab />);
+
+    const location = await screen.findByLabelText("Location");
+    await user.clear(location);
+    await user.type(location, " Berlin ,, Remote , Germany,");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await screen.findByRole("status");
+    const body = put.mock.calls[0][0] as Record<string, unknown>;
+    expect(body.locations).toEqual(["Berlin", "Remote", "Germany"]);
+    expect(body).not.toHaveProperty("location");
+    expect(location).toHaveValue("Berlin, Remote, Germany");
+  });
+
+  it("saves an empty field as an empty list", async () => {
+    const put = vi.fn((body: unknown) => json(200, { ...CONFIG, ...(body as object) }));
+    mockApi(put);
+    const user = userEvent.setup();
+    render(<FiltersTab />);
+
+    await user.clear(await screen.findByLabelText("Location"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await screen.findByRole("status");
+    expect(put).toHaveBeenCalledWith(expect.objectContaining({ locations: [] }));
+  });
+
+  it("keeps Save disabled when the list only changes in spacing", async () => {
+    mockApi();
+    const user = userEvent.setup();
+    render(<FiltersTab />);
+
+    const location = await screen.findByLabelText("Location");
+    await user.clear(location);
+    await user.type(location, "Berlin,Remote, ");
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+
+    await user.type(location, "Germany");
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });
 
   it("saves the edited filters, keeps the other config fields and shows the next-run note", async () => {
@@ -69,7 +125,7 @@ describe("FiltersTab", () => {
     expect(put).toHaveBeenCalledWith({
       keywords_include: ["frontend", "react"],
       keywords_exclude: ["intern", "junior"],
-      location: "Berlin",
+      locations: ["Berlin", "Remote"],
       cron: "0 7 * * *",
       timezone: "UTC",
       profile: "# Profile",
@@ -78,12 +134,12 @@ describe("FiltersTab", () => {
 
   it("shows a validation error on the field", async () => {
     mockApi(() =>
-      json(422, { detail: [{ loc: ["body", "location"], msg: "Location is too long" }] }),
+      json(422, { detail: [{ loc: ["body", "locations"], msg: "Location is too long" }] }),
     );
     const user = userEvent.setup();
     render(<FiltersTab />);
 
-    await user.type(await screen.findByLabelText("Location"), "x");
+    await user.type(await screen.findByLabelText("Location"), ", x");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(await screen.findByText("Location is too long")).toBeInTheDocument();

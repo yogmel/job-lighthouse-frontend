@@ -24,7 +24,7 @@ full target product. Versioning the build is a separate, later exercise.
 - Check all tracking companies; edit, run now, pause, or remove one
 - Define a recurrent job watcher (schedule)
 - Add your PROFILE to enable agent match-making (`match_score`)
-- Add keywords (include/exclude) and location to filter out irrelevant positions
+- Add keywords (include/exclude) and locations to filter out irrelevant positions
 - Check all jobs
   - Filter by active, company, tier
   - Sort by score
@@ -175,7 +175,7 @@ id: string;
 user_id: string;
 keywords_include: string[];
 keywords_exclude: string[]; // word-boundary matched, applied at scrape time
-location: string;
+locations: string[]; // any-match, case-insensitive substring; [] keeps everything
 cron: Cron; // evaluated in `timezone`
 timezone: string; // IANA name, default "UTC"; Settings → Schedule picks it
 profile: string; // markdown, replaces docs/PROFILE.md
@@ -186,6 +186,12 @@ profile_version: number; // bumped on every profile edit
 list from the original design — the real UI (Settings → Filters) always
 needed both, plus word-boundary matching on excludes so `"intern"` doesn't
 exclude `"Internal Tools"`.
+
+`locations` replaces the single `location` string (BE-068 / FE-042). A job is
+kept if its location contains **any** entry; a job with no location always
+passes. Remote jobs no longer pass on their own — users add `Remote` to the
+list. Settings → Filters edits it as one comma-separated line, like the
+keyword lists.
 
 `profile` lives here rather than in its own store: it is 1:1 with the config,
 has the same lifetime, and is read and written by exactly the same callers

@@ -16,7 +16,7 @@ const CONFIG: Config = {
   user_id: "u1",
   keywords_include: ["frontend"],
   keywords_exclude: ["intern"],
-  location: "Berlin",
+  locations: ["Berlin", "Remote"],
   cron: "0 7 * * *",
   timezone: "UTC",
   profile: "# Profile",
@@ -99,7 +99,7 @@ describe("ScheduleTab", () => {
     expect(put).toHaveBeenCalledWith({
       keywords_include: ["frontend"],
       keywords_exclude: ["intern"],
-      location: "Berlin",
+      locations: ["Berlin", "Remote"],
       cron: "0 7 * * 1-5",
       timezone: "UTC",
       profile: "# Profile",
